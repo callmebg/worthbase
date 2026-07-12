@@ -5,6 +5,7 @@
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-community/datetimepicker": "^9.1.0",
+    "@shopify/react-native-skia": "^2.6.2",
     "expo": "~57.0.4",
     "expo-crypto": "~57.0.0",
     "expo-document-picker": "^57.0.0",
@@ -22,6 +23,7 @@
     "react": "19.2.3",
     "react-native": "0.86.0",
     "react-native-chart-kit": "^7.0.2",
+    "react-native-financial-charts": "^2.2.2",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-paper": "^5.15.3",
     "react-native-reanimated": "^4.5.0",

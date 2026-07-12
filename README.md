@@ -24,27 +24,33 @@
 
 ---
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)
-
 ## 截图
 
-<!-- TODO: 补充截图 -->
-<!-- 建议截图内容：总览面板 / 资产管理 / 添加资产 / 卖出结算 / 设置 -->
+<p align="center">
+  <img src="./docs/screenshots/dashboard.jpg" alt="总览" width="200">
+  <img src="./docs/screenshots/account.jpg" alt="账户" width="200">
+  <img src="./docs/screenshots/property.jpg" alt="资产" width="200">
+  <img src="./docs/screenshots/setting.jpg" alt="设置" width="200">
+</p>
+
+---
+
+## star
+
+[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)    
 
 ---
 
 ## 功能特性
 
 ### 账户余额管理
-- 支持微信、支付宝、银行卡、现金、基金等多种账户类型
+- 支持微信、支付宝、银行卡、现金、基金、其他 6 种账户类型
 - 定期手动更新余额，每次更新自动存为快照
 - 多账户余额汇总，一键查看流动资产总额
 
 ### 净资产趋势分析
-- 基于历史余额快照生成净资产趋势折线图
-- 支持半年 / 一年 / 两年时间范围切换
+- 基于历史余额快照生成净资产趋势折线图（支持手势缩放与拖拽平移）
+- 净资产 = 流动资产 + 资产估值 − 未分摊购入成本
 - 净资产目标设定与进度条可视化
 
 ### 实物资产管理
@@ -60,7 +66,7 @@
 |------|------|------|
 | 简单线性分摊 | 购入价 ÷ 已持有月数 | 月成本随时间递减 |
 | 预期寿命分摊 | 购入价 ÷ 预期使用月数 | 每月固定 |
-| 残值分摊 | (购入价 - 预估残值) ÷ 预期使用月数 | 每月固定，考虑残值 |
+| 残值分摊 | (购入价 − 预估残值) ÷ 预期使用月数 | 每月固定，考虑残值 |
 | 不分摊 | 0 | 仅计算经常性支出和维护费用 |
 
 持有成本 = 分摊成本 + 经常性支出（当月生效项之和）+ 一次性维护费用（如选纳入分摊则摊销）
@@ -74,11 +80,12 @@
 - **完全本地存储**：无服务器、无账号注册、无数据上传
 - **应用锁**：PIN 码 + 生物识别（指纹 / Face ID）
 - **自动备份**：退出 App 时自动备份 SQLite 数据库副本（保留最近 3 份）
-- **导入导出**：支持 JSON（完整备份）和 CSV（可读导出）格式
+- **导入导出**：支持 JSON（完整备份）和 CSV（可读导出）格式，导入时支持预览与合并/替换策略
 
 ### 外观
 - 深色模式（跟随系统 / 浅色 / 深色）
-- 4 种主题颜色可选
+- 4 种主题颜色可选（紫 / 蓝 / 绿 / 橙）
+- Material Design 3 设计语言（基于 react-native-paper）
 - 货币符号可自定义
 
 ---
@@ -88,14 +95,18 @@
 | 类别 | 技术 |
 |------|------|
 | 框架 | React Native 0.86 + Expo SDK 57 |
-| 语言 | TypeScript ~6.0 |
-| 路由 | Expo Router |
+| 语言 | TypeScript 6.0 |
+| 路由 | Expo Router (File-based) |
 | 数据库 | expo-sqlite (SQLite) |
 | 状态管理 | Zustand |
-| 图表 | react-native-chart-kit |
-| 安全锁 | expo-local-authentication |
+| UI 组件库 | react-native-paper (Material Design 3) |
+| 图表 | react-native-chart-kit + react-native-svg |
+| 图标 | lucide-react-native |
+| 手势 | react-native-gesture-handler + react-native-reanimated |
+| 底部弹窗 | @gorhom/bottom-sheet |
+| 安全锁 | expo-local-authentication + expo-secure-store |
 | 构建工具 | EAS Build |
-| 测试 | Jest + ts-jest |
+| 测试 | Jest + ts-jest + @testing-library/react-native |
 
 ---
 
@@ -103,8 +114,8 @@
 
 ### 环境要求
 
-- Node.js >= 20.19.4（推荐使用 [nvm](https://github.com/coreybutler/nvm-windows) 管理版本）
-- npm（通过 `corepack enable npm` 启用）
+- Node.js >= 20（项目含 `.nvmrc`，可用 nvm 管理版本）
+- npm
 - Android Studio（本地编译 Android 需要，含 JDK 17+）
 - Xcode（仅 macOS，本地编译 iOS 需要）
 
@@ -173,7 +184,7 @@ npx expo prebuild --platform android
 
 # 编译 Release APK
 cd android
-.\gradlew assembleRelease
+./gradlew assembleRelease
 ```
 
 > 需要设置 `JAVA_HOME` 指向 JDK 17+，并配置 `ANDROID_HOME` 指向 Android SDK。
@@ -186,7 +197,15 @@ cd android
 npm test
 ```
 
-运行 36 个单元测试，覆盖持有成本计算引擎的核心逻辑：4 种分摊策略、经常性支出区间、卖出结算、维护分摊等。
+运行 7 个测试套件、158 个单元测试，覆盖：
+
+- 持有成本计算引擎（4 种分摊策略、经常性支出区间、卖出结算、维护分摊）
+- 数据库 Repository 层 CRUD
+- Zustand Store 状态管理
+- 数据服务（备份 / 导出 / 导入）
+- UI 组件渲染
+- 认证服务
+- 引擎边界条件
 
 ---
 
@@ -202,12 +221,15 @@ worthbase/
 │   └── settings.tsx            #   设置
 ├── src/
 │   ├── components/             # UI 组件
+│   │   ├── ui/                 #   基础 UI 组件库（Button, Card, Chip, FAB, BottomSheet 等）
 │   │   ├── AddAssetModal.tsx   #   3 步添加资产表单
 │   │   ├── AssetDetailModal.tsx#   资产详情弹窗
-│   │   ├── SettlementModal.tsx#   卖出结算弹窗
-│   │   ├── HoldingCostBreakdown.tsx  # 持有成本三层分解
+│   │   ├── SettlementModal.tsx #   卖出结算弹窗
+│   │   ├── HoldingCostBreakdown.tsx # 持有成本三层分解
+│   │   ├── InteractiveTrendChart.tsx # 可交互趋势折线图（缩放/拖拽）
 │   │   ├── ValuationChart.tsx  #   估值历史折线图
-│   │   └── OnboardingView.tsx  #   首次使用引导
+│   │   ├── OnboardingView.tsx  #   首次使用引导
+│   │   └── LockScreen.tsx      #   应用锁界面
 │   ├── db/                     # 数据库层
 │   │   ├── schema.ts           #   7 张表建表语句 + 索引
 │   │   ├── client.ts           #   SQLite 连接
@@ -220,13 +242,14 @@ worthbase/
 │   │   ├── SettlementCalculator.ts        # 卖出结算
 │   │   ├── RecurringExpenseCalculator.ts  # 经常性支出区间
 │   │   └── MaintenanceCalculator.ts       # 维护分摊
-│   ├── stores/                 # Zustand 状态管理
-│   ├── services/               # 数据服务（备份 / 导出 / 导入）
-│   ├── hooks/                  # 自定义 Hook
+│   ├── stores/                 # Zustand 状态管理（account / asset / settings）
+│   ├── services/               # 数据服务（备份 / 导出 / 导入 / 认证）
+│   ├── hooks/                  # 自定义 Hook（数据库初始化）
+│   ├── theme/                  # 主题系统（颜色 / 排版 / 间距 / 图标 / tokens）
 │   ├── types/                  # 类型定义（enums, models）
-│   └── utils/                  # 工具函数
-├── __tests__/                  # 单元测试
-├── assets/                     # 图标和启动画面
+│   └── utils/                  # 工具函数（加密 / 格式化 / 校验）
+├── __tests__/                  # 单元测试（7 套件 / 158 用例）
+├── assets/                     # 应用图标和启动画面
 ├── app.json                    # Expo 配置
 ├── eas.json                    # EAS Build 配置
 ├── jest.config.js              # Jest 配置
@@ -238,8 +261,8 @@ worthbase/
 ```
 ┌─────────────────────────────────────────────────────┐
 │                    UI 层                              │
-│  app/*.tsx + src/components/*.tsx                    │
-│  Expo Router 四 Tab 导航                              │
+│  app/*.tsx + src/components/                         │
+│  Expo Router 四 Tab 导航 + Paper MD3 组件            │
 ├─────────────────────────────────────────────────────┤
 │                  状态管理层                            │
 │  src/stores/ (Zustand)                               │
@@ -262,6 +285,12 @@ worthbase/
 ```
 
 引擎**实时计算**，不预存结果。每次打开页面时根据当前日期动态计算月成本、累计、剩余等。
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)
 
 ---
 

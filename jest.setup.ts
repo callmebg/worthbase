@@ -292,11 +292,50 @@ jest.mock('react-native-reanimated', () => {
 // ─── Mock react-native-gesture-handler ───
 jest.mock('react-native-gesture-handler', () => {
   const React = jest.requireActual('react');
+  const noop = () => ({});
+  const gestureMock = {
+    onUpdate: noop, onEnd: noop, onBegin: noop, onStart: noop,
+    minDistance: noop, minPointers: noop, enabled: noop,
+  };
+  // Handler components that accept refs and render children
+  const makeHandler = (name: string) =>
+    React.forwardRef(({ children, ...props }: any, ref: any) =>
+      React.createElement(name, { ref }, children)
+    );
   return {
     GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
-    PanGestureHandler: ({ children }: any) => children,
-    TapGestureHandler: ({ children }: any) => children,
-    State: {},
+    PanGestureHandler: makeHandler('PanGestureHandler'),
+    PinchGestureHandler: makeHandler('PinchGestureHandler'),
+    TapGestureHandler: makeHandler('TapGestureHandler'),
+    GestureDetector: ({ children }: any) => children,
+    Gesture: {
+      Pan: () => gestureMock,
+      Pinch: () => gestureMock,
+      Tap: () => gestureMock,
+      Simultaneous: (...gestures: any[]) => gestures[0],
+      Race: (...gestures: any[]) => gestures[0],
+      Exclusive: (...gestures: any[]) => gestures[0],
+    },
+    State: { UNDETERMINED: 0, BEGAN: 2, ACTIVE: 4, END: 5, FAILED: 6, CANCELLED: 3 },
+  };
+});
+
+// ─── Mock @shopify/react-native-skia ───
+jest.mock('@shopify/react-native-skia', () => {
+  const React = jest.requireActual('react');
+  const makeMock = (name: string) => (props: any) => React.createElement(name, props, props?.children);
+  return {
+    Canvas: makeMock('SkiaCanvas'),
+    Path: makeMock('SkiaPath'),
+    Group: makeMock('SkiaGroup'),
+    Line: makeMock('SkiaLine'),
+    LinearGradient: makeMock('SkiaLinearGradient'),
+    Rect: makeMock('SkiaRect'),
+    Fill: makeMock('SkiaFill'),
+    Circle: makeMock('SkiaCircle'),
+    Text: makeMock('SkiaText'),
+    vec: (x: number, y: number) => ({ x, y }),
+    Skia: { Path: { Make: () => ({ moveTo: jest.fn(), lineTo: jest.fn(), close: jest.fn(), copy: jest.fn() }) } },
   };
 });
 

@@ -16,10 +16,11 @@ import {
   Alert,
   Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/utils/format';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { LineChart } from 'react-native-chart-kit';
+import { InteractiveTrendChart } from '@/components/InteractiveTrendChart';
 import { useAccountStore } from '@/stores/account-store';
 import { useAssetStore } from '@/stores/asset-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -286,21 +287,15 @@ export default function DashboardScreen() {
           </View>
         </View>
         {trendData.datasets[0].data.length > 1 ? (
-          <LineChart
-            data={trendData}
-            width={screenWidth - 96}
-            height={180}
-            chartConfig={{
-              backgroundColor: theme.colors.surface,
-              backgroundGradientFrom: theme.colors.surface,
-              backgroundGradientTo: theme.colors.surface,
-              decimalPlaces: 0,
-              color: () => theme.colors.primary,
-              labelColor: () => theme.colors.onSurfaceVariant,
-              propsForDots: { r: '3', strokeWidth: '1', stroke: theme.colors.primary },
-            }}
-            bezier
-            style={styles.chart}
+          <InteractiveTrendChart
+            data={{ labels: trendData.labels, values: trendData.datasets[0].data }}
+            width={screenWidth - 64}
+            height={200}
+            currencySymbol={currencySymbol}
+            backgroundColor={theme.colors.surface}
+            primaryColor={theme.colors.primary}
+            labelColor={theme.colors.onSurfaceVariant}
+            gridColor={theme.colors.surfaceVariant}
           />
         ) : (
           <View style={styles.emptyChart}>
@@ -413,55 +408,50 @@ export default function DashboardScreen() {
     {/* ── Fullscreen Chart Modal ── */}
     <Modal
       visible={fullscreenChart}
-      animationType="fade"
+      animationType="slide"
       transparent={false}
       onRequestClose={() => setFullscreenChart(false)}
+      statusBarTranslucent
     >
-      <View style={[styles.fullscreenContainer, { backgroundColor: theme.colors.surface }]}>
+      <SafeAreaView style={[styles.fullscreenContainer, { backgroundColor: theme.colors.background }]}>
+        {/* Header: close LEFT, title center, range RIGHT */}
         <View style={styles.fullscreenHeader}>
+          <TouchableOpacity
+            onPress={() => setFullscreenChart(false)}
+            style={styles.closeBtn}
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+          >
+            <Icon name="X" size={24} color="onSurface" />
+          </TouchableOpacity>
           <Text style={[styles.fullscreenTitle, { color: theme.colors.onSurface }]}>
             净资产趋势
           </Text>
-          <View style={styles.fullscreenHeaderRight}>
-            <View style={styles.fullscreenRange}>
-              {(['month', 'quarter', 'year'] as TimeRange[]).map(r => (
-                <AppChip
-                  key={r}
-                  label={timeRangeLabels[r]}
-                  selected={timeRange === r}
-                  onPress={() => setTimeRange(r)}
-                  compact
-                />
-              ))}
-            </View>
-            <TouchableOpacity onPress={() => setFullscreenChart(false)} style={styles.closeBtn}>
-              <Icon name="X" size={24} color="onSurface" />
-            </TouchableOpacity>
+          <View style={styles.fullscreenRange}>
+            {(['month', 'quarter', 'year'] as TimeRange[]).map(r => (
+              <AppChip
+                key={r}
+                label={timeRangeLabels[r]}
+                selected={timeRange === r}
+                onPress={() => setTimeRange(r)}
+                compact
+              />
+            ))}
           </View>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.fullscreenChartScroll}
-        >
-          <LineChart
-            data={trendData}
-            width={Math.max(screenWidth * 1.8, trendData.labels.length * 80)}
-            height={Dimensions.get('window').height - 120}
-            chartConfig={{
-              backgroundColor: theme.colors.surface,
-              backgroundGradientFrom: theme.colors.surface,
-              backgroundGradientTo: theme.colors.surface,
-              decimalPlaces: 0,
-              color: () => theme.colors.primary,
-              labelColor: () => theme.colors.onSurfaceVariant,
-              propsForDots: { r: '4', strokeWidth: '2', stroke: theme.colors.primary },
-            }}
-            bezier
-            style={styles.fullscreenChart}
+
+        {/* Chart area — flex:1 fills remaining, onLayout gives real dims */}
+        <View style={styles.fullscreenChartWrap}>
+          <InteractiveTrendChart
+            data={{ labels: trendData.labels, values: trendData.datasets[0].data }}
+            currencySymbol={currencySymbol}
+            backgroundColor={theme.colors.surface}
+            primaryColor={theme.colors.primary}
+            labelColor={theme.colors.onSurfaceVariant}
+            gridColor={theme.colors.surfaceVariant}
+            showZoomControls
           />
-        </ScrollView>
-      </View>
+        </View>
+      </SafeAreaView>
     </Modal>
     </>
   );
@@ -533,11 +523,23 @@ const styles = StyleSheet.create({
   quickBtnText: { fontSize: 12, marginTop: 8 },
   // Fullscreen chart
   fullscreenContainer: { flex: 1 },
-  fullscreenHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 },
-  fullscreenHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  fullscreenTitle: { fontSize: 18, fontWeight: '700' },
-  closeBtn: { padding: 4 },
+  fullscreenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 52,
+  },
+  fullscreenTitle: { fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(128,128,128,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   fullscreenRange: { flexDirection: 'row' },
-  fullscreenChartScroll: { flexGrow: 1, paddingHorizontal: 16 },
-  fullscreenChart: { borderRadius: 8 },
+  fullscreenChartWrap: { flex: 1, paddingHorizontal: 8, paddingBottom: 4 },
 });

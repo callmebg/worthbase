@@ -20,26 +20,33 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 
 ---
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)
-
 ## Screenshots
 
-<!-- TODO: Add screenshots -->
+<p align="center">
+  <img src="./docs/screenshots/dashboard.jpg" alt="Dashboard" width="200">
+  <img src="./docs/screenshots/account.jpg" alt="Accounts" width="200">
+  <img src="./docs/screenshots/property.jpg" alt="Assets" width="200">
+  <img src="./docs/screenshots/setting.jpg" alt="Settings" width="200">
+</p>
+
+---
+
+## star
+
+[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase) 
 
 ---
 
 ## Features
 
 ### Account Balance Management
-- Supports WeChat Pay, Alipay, bank cards, cash, funds, and more
+- Supports 6 account types: WeChat Pay, Alipay, bank cards, cash, funds, and other
 - Periodic manual balance updates, each saved as a snapshot
 - Multi-account balance summary with one-tap total
 
 ### Net Worth Trend Analysis
-- Net worth trend line chart based on historical balance snapshots
-- Time range switching: 6 months / 1 year / 2 years
+- Net worth trend line chart with pinch-to-zoom and pan-to-drag gestures
+- Net worth = Liquid assets + Asset valuations − Unamortized purchase costs
 - Net worth goal setting with progress bar visualization
 
 ### Physical Asset Management
@@ -55,8 +62,10 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 |--------|---------|----------------|
 | Simple Linear | Purchase Price ÷ Months Owned | Monthly cost decreases over time |
 | Expected Lifespan | Purchase Price ÷ Expected Months | Fixed monthly cost |
-| Residual Value | (Purchase Price - Residual Value) ÷ Expected Months | Fixed, accounts for residual value |
+| Residual Value | (Purchase Price − Residual Value) ÷ Expected Months | Fixed, accounts for residual value |
 | No Depreciation | 0 | Only recurring expenses and maintenance |
+
+Holding cost = Depreciation + Recurring expenses (active items for current month) + One-time maintenance (amortized if selected)
 
 - **Recurring expenses**: Phone bills, fuel, insurance, etc. with effective date ranges
 - **One-time maintenance**: Repairs, servicing — optionally included in cost allocation
@@ -67,11 +76,12 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 - **Fully local storage**: No server, no registration, no data upload
 - **App lock**: PIN + biometric authentication (fingerprint / Face ID)
 - **Auto backup**: Automatic SQLite database backup on app exit (keeps last 3)
-- **Import/Export**: JSON (full backup) and CSV (readable export) formats
+- **Import/Export**: JSON (full backup) and CSV (readable export) formats, with preview and merge/replace strategies on import
 
 ### Appearance
 - Dark mode (follows system / light / dark)
-- 4 theme colors
+- 4 theme colors (purple / blue / green / orange)
+- Material Design 3 design language (via react-native-paper)
 - Customizable currency symbol
 
 ---
@@ -81,14 +91,18 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 | Category | Technology |
 |----------|------------|
 | Framework | React Native 0.86 + Expo SDK 57 |
-| Language | TypeScript ~6.0 |
-| Routing | Expo Router |
+| Language | TypeScript 6.0 |
+| Routing | Expo Router (File-based) |
 | Database | expo-sqlite (SQLite) |
 | State Management | Zustand |
-| Charts | react-native-chart-kit |
-| Security | expo-local-authentication |
+| UI Components | react-native-paper (Material Design 3) |
+| Charts | react-native-chart-kit + react-native-svg |
+| Icons | lucide-react-native |
+| Gestures | react-native-gesture-handler + react-native-reanimated |
+| Bottom Sheet | @gorhom/bottom-sheet |
+| Security | expo-local-authentication + expo-secure-store |
 | Build Tool | EAS Build |
-| Testing | Jest + ts-jest |
+| Testing | Jest + ts-jest + @testing-library/react-native |
 
 ---
 
@@ -96,7 +110,7 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 
 ### Prerequisites
 
-- Node.js >= 20.19.4 (recommend [nvm](https://github.com/nvm-sh/nvm))
+- Node.js >= 20 (project includes `.nvmrc`, recommend [nvm](https://github.com/nvm-sh/nvm) for version management)
 - npm
 - Android Studio (for local Android builds, includes JDK 17+)
 - Xcode (macOS only, for local iOS builds)
@@ -143,6 +157,14 @@ eas build --profile preview --platform android
 eas build --profile preview --platform ios
 ```
 
+`eas.json` includes three build profiles:
+
+| Profile | Purpose | Android | iOS |
+|---------|---------|---------|-----|
+| development | Dev & debug | APK | Simulator |
+| preview | Internal testing | APK | — |
+| production | Store release | AAB (App Bundle) | IPA |
+
 ### Local Build
 
 ```bash
@@ -160,7 +182,15 @@ cd android && ./gradlew assembleRelease
 npm test
 ```
 
-Runs 36 unit tests covering the holding cost calculation engine: 4 depreciation strategies, recurring expense intervals, sell settlement, maintenance allocation, and more.
+Runs 7 test suites with 158 unit tests, covering:
+
+- Holding cost calculation engine (4 depreciation strategies, recurring expense intervals, sell settlement, maintenance allocation)
+- Database Repository layer CRUD
+- Zustand Store state management
+- Data services (backup / export / import)
+- UI component rendering
+- Authentication service
+- Engine boundary conditions
 
 ---
 
@@ -169,23 +199,83 @@ Runs 36 unit tests covering the holding cost calculation engine: 4 depreciation 
 ```
 worthbase/
 ├── app/                        # Page routes (Expo Router)
+│   ├── _layout.tsx             #   Root layout (Tab nav + AppState auto-backup)
+│   ├── index.tsx               #   Dashboard (net worth + trend chart + holding cost summary)
+│   ├── accounts.tsx            #   Account management
+│   ├── assets.tsx              #   Asset management
+│   └── settings.tsx            #   Settings
 ├── src/
 │   ├── components/             # UI components
+│   │   ├── ui/                 #   Base UI kit (Button, Card, Chip, FAB, BottomSheet, etc.)
+│   │   ├── AddAssetModal.tsx   #   3-step add asset form
+│   │   ├── AssetDetailModal.tsx#   Asset detail modal
+│   │   ├── SettlementModal.tsx #   Sell settlement modal
+│   │   ├── HoldingCostBreakdown.tsx # 3-layer holding cost breakdown
+│   │   ├── InteractiveTrendChart.tsx # Interactive trend chart (zoom/drag)
+│   │   ├── ValuationChart.tsx  #   Valuation history chart
+│   │   ├── OnboardingView.tsx  #   First-run onboarding
+│   │   └── LockScreen.tsx      #   App lock screen
 │   ├── db/                     # Database layer (SQLite)
+│   │   ├── schema.ts           #   7 tables + indexes
+│   │   ├── client.ts           #   SQLite connection
+│   │   ├── migrations.ts       #   Migration management
+│   │   └── *-repository.ts     #   Per-table Repository (CRUD)
 │   ├── engine/                 # Calculation engine (strategy pattern)
-│   │   └── strategies/         # 4 depreciation strategy implementations
-│   ├── stores/                 # Zustand state management
-│   ├── services/               # Data services (backup/export/import)
-│   ├── hooks/                  # Custom Hooks
-│   ├── types/                  # Type definitions
-│   └── utils/                  # Utility functions
-├── __tests__/                  # Unit tests
-├── assets/                     # Icons and splash screen
+│   │   ├── strategies/         #   4 depreciation strategy implementations
+│   │   ├── HoldingCostCalculator.ts       # Holding cost aggregation
+│   │   ├── NetWorthCalculator.ts          # Net worth calculation
+│   │   ├── SettlementCalculator.ts        # Sell settlement
+│   │   ├── RecurringExpenseCalculator.ts  # Recurring expense intervals
+│   │   └── MaintenanceCalculator.ts       # Maintenance allocation
+│   ├── stores/                 # Zustand state (account / asset / settings)
+│   ├── services/               # Data services (backup / export / import / auth)
+│   ├── hooks/                  # Custom Hooks (database init)
+│   ├── theme/                  # Theme system (colors / typography / spacing / icons / tokens)
+│   ├── types/                  # Type definitions (enums, models)
+│   └── utils/                  # Utilities (crypto / formatting / validation)
+├── __tests__/                  # Unit tests (7 suites / 158 cases)
+├── assets/                     # App icons and splash screen
 ├── app.json                    # Expo config
 ├── eas.json                    # EAS Build config
 ├── jest.config.js              # Jest config
 └── tsconfig.json               # TypeScript config
 ```
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    UI Layer                          │
+│  app/*.tsx + src/components/                         │
+│  Expo Router 4-Tab nav + Paper MD3 components        │
+├─────────────────────────────────────────────────────┤
+│                  State Layer                         │
+│  src/stores/ (Zustand)                               │
+│  account-store · asset-store · settings-store        │
+├─────────────────────────────────────────────────────┤
+│                   Engine Layer                       │
+│  src/engine/                                         │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────┐ │
+│  │ Depreciation│  │ Recurring    │  │ Maintenance │ │
+│  │ (4 impls)   │  │ (intervals)  │  │ (alloc.)    │ │
+│  └─────────────┘  └──────────────┘  └────────────┘ │
+│  Holding cost = Depreciation + Recurring + Maint.    │
+├─────────────────────────────────────────────────────┤
+│                   Data Layer                         │
+│  src/db/ (expo-sqlite)                               │
+│  7 tables: accounts · balance_snapshots · assets ·   │
+│  recurring_expenses · maintenance_records ·          │
+│  valuation_history · settings                        │
+└─────────────────────────────────────────────────────┘
+```
+
+The engine computes everything **in real-time** — no pre-stored results. Costs, accumulated totals, and remaining values are dynamically calculated based on the current date every time a page loads.
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)
 
 ---
 
@@ -194,6 +284,12 @@ worthbase/
 Issues and Pull Requests are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 For security issues, please see [SECURITY.md](./SECURITY.md).
+
+### Dev Conventions
+- TypeScript strict mode
+- Path alias `@/` → `src/`
+- Extend the calculation engine by implementing strategy interfaces (see `src/engine/strategies/`)
+- New features should include unit tests
 
 ---
 
