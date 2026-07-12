@@ -1,0 +1,99 @@
+name: Bug Report / 缺陷报告
+description: Report a bug or unexpected behavior / 报告 Bug 或异常行为
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你的反馈！请填写以下信息帮助我们定位问题。
+        Thanks for reporting! Please fill in the details below to help us investigate.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述 / Description
+      description: 简要描述你遇到的问题 / A clear description of the bug
+      placeholder: |
+        例如：在资产详情页点击"卖出"后，持有成本显示为 NaN
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to Reproduce
+      description: 如何一步步重现这个问题 / How to reproduce the issue step by step
+      placeholder: |
+        1. 打开 App
+        2. 进入"资产"页
+        3. 添加一个资产...
+        4. 点击...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为 / Expected Behavior
+      description: 你期望发生什么 / What you expected to happen
+      placeholder: |
+        应该显示正确的持有成本金额
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为 / Actual Behavior
+      description: 实际发生了什么 / What actually happened
+      placeholder: |
+        显示 NaN 或 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 运行平台 / Platform
+      options:
+        - Android
+        - iOS
+        - Web
+        - 多平台都有 / Multiple platforms
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App 版本 / App Version
+      description: 你使用的版本号 / The version you're using
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备信息 / Device Info
+      description: 设备型号和系统版本 / Device model and OS version
+      placeholder: "Pixel 8, Android 15 / iPhone 16, iOS 18"
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或日志 / Screenshots or Logs
+      description: 如有截图或错误日志请粘贴 / Paste screenshots or error logs if available
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息 / Additional Context
+      description: 其他可能有帮助的信息 / Any other context about the problem
+    validations:
+      required: false

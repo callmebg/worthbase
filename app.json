@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "家底 WorthBase",
+    "slug": "worthbase",
+    "version": "1.0.0",
+    "scheme": "worthbase",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6C5CE7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.worthbase.app"
+    },
+    "android": {
+      "package": "com.worthbase.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#6C5CE7",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-router",
+      "expo-local-authentication",
+      "expo-file-system",
+      "expo-screen-orientation",
+      "./plugins/with-china-mirror.js"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "worthbase"
+      }
+    }
+  }
+}

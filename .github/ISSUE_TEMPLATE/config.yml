@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions / 问题讨论
+    url: https://github.com/callmebg/worthbase/discussions
+    about: Ask questions, share ideas, or discuss with the community / 提问、分享想法或参与社区讨论
+  - name: Security Vulnerability / 安全漏洞
+    url: https://github.com/callmebg/worthbase/security/advisories/new
+    about: Report security vulnerabilities privately / 私下报告安全漏洞
