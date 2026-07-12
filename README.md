@@ -35,12 +35,6 @@
 
 ---
 
-## star
-
-[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)    
-
----
-
 ## 功能特性
 
 ### 账户余额管理
@@ -75,6 +69,11 @@
 - **一次性维护**：维修、保养等，可选纳入分摊或仅记录
 - **月/日双视角**：同时展示月持有成本和日均持有成本
 - **汇总面板**：所有资产月持有成本总计，直观展示"养你所有的东西要多少钱"
+
+<p align="center">
+  <img src="./docs/screenshots/calc.jpg" alt="持有成本计算" width="200">
+  <img src="./docs/screenshots/calc2.jpg" alt="持有成本详情" width="200">
+</p>
 
 ### 数据安全
 - **完全本地存储**：无服务器、无账号注册、无数据上传
@@ -122,6 +121,7 @@
 ### 安装依赖
 
 ```bash
+git clone https://github.com/callmebg/worthbase.git
 cd worthbase
 npm install
 ```
@@ -145,6 +145,15 @@ npm run android
 # iOS（仅 macOS，需要 Xcode）
 npm run ios
 ```
+
+---
+
+## 下载
+
+| 平台 | 方式 |
+|------|------|
+| Android | 前往 [GitHub Releases](https://github.com/callmebg/worthbase/releases) 下载 APK |
+| iOS | 需通过 EAS 自行编译（受 Apple 分发限制） |
 
 ---
 
@@ -224,6 +233,8 @@ worthbase/
 │   │   ├── ui/                 #   基础 UI 组件库（Button, Card, Chip, FAB, BottomSheet 等）
 │   │   ├── AddAssetModal.tsx   #   3 步添加资产表单
 │   │   ├── AssetDetailModal.tsx#   资产详情弹窗
+│   │   ├── DatePickerField.tsx #   日期选择器组件
+│   │   ├── TimeRangeSheet.tsx  #   时间区间选择底部弹窗
 │   │   ├── SettlementModal.tsx #   卖出结算弹窗
 │   │   ├── HoldingCostBreakdown.tsx # 持有成本三层分解
 │   │   ├── InteractiveTrendChart.tsx # 可交互趋势折线图（缩放/拖拽）
@@ -249,6 +260,7 @@ worthbase/
 │   ├── types/                  # 类型定义（enums, models）
 │   └── utils/                  # 工具函数（加密 / 格式化 / 校验）
 ├── __tests__/                  # 单元测试（7 套件 / 158 用例）
+│   ├── helpers/                #   测试辅助工具（mock-database 等）
 ├── assets/                     # 应用图标和启动画面
 ├── app.json                    # Expo 配置
 ├── eas.json                    # EAS Build 配置
@@ -288,12 +300,6 @@ worthbase/
 
 ---
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)
-
----
-
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request！详见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
@@ -308,6 +314,57 @@ worthbase/
 
 ---
 
+## 开发指南
+
+### 添加新的分摊策略
+
+1. 在 `src/engine/strategies/` 下新建策略文件，实现 `AmortizationStrategy` 接口：
+
+```typescript
+// src/engine/strategies/MyNewStrategy.ts
+import type { AmortizationStrategy } from './AmortizationStrategy';
+import type { Asset } from '@/types/models';
+
+export const MyNewStrategy: AmortizationStrategy = {
+  calculateMonthlyCost(asset: Asset, currentDate: Date): number { /* ... */ },
+  calculateAccumulated(asset: Asset, currentDate: Date): number { /* ... */ },
+  calculateRemaining(asset: Asset, currentDate: Date): number { /* ... */ },
+};
+```
+
+2. 在 `src/types/enums.ts` 的 `AmortizationType` 枚举中添加新类型
+3. 在 `src/engine/strategies/index.ts` 的 `strategyMap` 中注册
+4. 在 `__tests__/engine.test.ts` 中补充对应的单元测试
+
+### 数据库迁移
+
+修改表结构时，在 `src/db/migrations.ts` 中添加新迁移：
+
+```typescript
+{
+  version: 3,                // 版本号递增
+  description: '描述变更',
+  up: async (db) => {
+    await db.execAsync(`ALTER TABLE xxx ADD COLUMN yyy TEXT;`);
+  },
+},
+```
+
+迁移需**幂等**（重复执行不报错），并在 `CURRENT_VERSION` 常量中同步更新版本号。
+
+### 代码规范
+- 运行测试：`npm test`
+- TypeScript 严格模式，路径别名 `@/` → `src/`
+- 新功能请配套单元测试，保持覆盖率
+
+---
+
 ## License
 
 [MIT](./LICENSE) © callmebg
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)

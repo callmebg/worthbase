@@ -26,19 +26,20 @@ import { useAssetStore } from '@/stores/asset-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { NetWorthCalculator } from '@/engine/NetWorthCalculator';
 import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
+import { getStrategy } from '@/engine/strategies';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
-import type { NetWorthResult } from '@/types/models';
+import type { NetWorthResult, ValuationHistory } from '@/types/models';
 import { formatCurrency, formatCompactCurrency } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { OnboardingView } from '@/components/OnboardingView';
+import { TimeRangeSheet, type TimeRangeState, type TimeRangePreset } from '@/components/TimeRangeSheet';
 
 const screenWidth = Dimensions.get('window').width;
-type TimeRange = 'month' | 'quarter' | 'year';
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -52,9 +53,11 @@ export default function DashboardScreen() {
   const [costBreakdown, setCostBreakdown] = useState<{ name: string; cost: number; category: string }[]>([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState<{ category: string; label: string; value: number }[]>([]);
   const [trendData, setTrendData] = useState<{ labels: string[]; datasets: { data: number[] }[] }>({ labels: [], datasets: [{ data: [] }] });
-  const [timeRange, setTimeRange] = useState<TimeRange>('month');
+  const [timeRange, setTimeRange] = useState<TimeRangeState>('6m');
   const [refreshing, setRefreshing] = useState(false);
   const [fullscreenChart, setFullscreenChart] = useState(false);
+  const [fullscreenKey, setFullscreenKey] = useState(0);
+  const [sheetVisible, setSheetVisible] = useState(false);
 
   // Lock to landscape when fullscreen chart is open
   useEffect(() => {
@@ -108,33 +111,99 @@ export default function DashboardScreen() {
       .sort((a, b) => b.value - a.value);
     setCategoryBreakdown(catBreakdown);
 
-    // Trend data: balance snapshots + asset valuations combined for true net worth
-    const dates = await BalanceSnapshotRepository.getAllSnapshotDates();
-    const numPoints = timeRange === 'month' ? 6 : timeRange === 'quarter' ? 12 : 24;
-    const recentDates = [...dates].reverse().slice(0, numPoints);
+    // ── Trend data: same formula as hero card ──────────────────────────────────
+    // net worth = liquid assets + asset valuations − unamortized cost
+    const activeAccountIds = new Set(accounts.map(a => a.id));
+    const trackedAssets = activeAssets.filter(a => a.valuationTracking);
 
-    const trackedAssets = assets.filter(a => a.status === AssetStatus.ACTIVE && a.valuationTracking);
+    // Pre-fetch all valuation histories ONCE (not inside the date loop)
+    const valuationHistories = new Map<string, ValuationHistory[]>();
+    for (const asset of trackedAssets) {
+      const history = await ValuationRepository.getByAsset(asset.id);
+      valuationHistories.set(asset.id, history); // already ASC ordered by recorded_date
+    }
 
-    const points: number[] = [];
+    // Determine date range boundaries
+    const allDates = await BalanceSnapshotRepository.getAllSnapshotDates(); // DESC
+    let cutoffStr: string;
+    let endStr = '9999-12-31';
+    if (typeof timeRange === 'string') {
+      // Preset
+      const curMonth = now.getMonth() + 1;
+      const curYear = now.getFullYear();
+      if (timeRange === '3m') {
+        const d = new Date(curYear, curMonth - 3, 1);
+        cutoffStr = d.toISOString().substring(0, 10);
+      } else if (timeRange === '6m') {
+        const d = new Date(curYear, curMonth - 6, 1);
+        cutoffStr = d.toISOString().substring(0, 10);
+      } else if (timeRange === '1y') {
+        const d = new Date(curYear, curMonth - 12, 1);
+        cutoffStr = d.toISOString().substring(0, 10);
+      } else if (timeRange === 'ytd') {
+        cutoffStr = `${curYear}-01-01`;
+      } else {
+        // 'all' — no cutoff
+        cutoffStr = '0000-01-01';
+      }
+    } else {
+      // Custom range { start, end } — YYYY-MM format
+      cutoffStr = timeRange.start + '-01';
+      // End of the end month
+      const [ey, em] = timeRange.end.split('-').map(Number);
+      const endOfMonth = new Date(ey, em, 0); // last day of the month
+      endStr = endOfMonth.toISOString().substring(0, 10);
+    }
+    // Keep only snapshots within range, then reverse to chronological (ASC) order
+    const recentDates = allDates.filter(d => d >= cutoffStr && d <= endStr).reverse();
+
+    // Compute net worth for EVERY date in range first (before downsampling)
+    const allPoints: { date: string; value: number }[] = [];
     for (const date of recentDates) {
+      const dateObj = new Date(date + 'T00:00:00');
+
+      // 1. Liquid assets — only from active (non-deleted) accounts
       const balMap = await BalanceSnapshotRepository.getBalancesForDate(date);
       let totalBalance = 0;
-      for (const b of balMap.values()) totalBalance += b;
-
-      let totalValuation = 0;
-      for (const asset of trackedAssets) {
-        const history = await ValuationRepository.getByAsset(asset.id);
-        const applicable = history.filter(h => h.recordedDate <= date);
-        if (applicable.length > 0) {
-          totalValuation += applicable[applicable.length - 1].valuation;
-        }
+      for (const [accountId, b] of balMap.entries()) {
+        if (activeAccountIds.has(accountId)) totalBalance += b;
       }
 
-      points.push(totalBalance + totalValuation);
+      // 2. Asset valuations — lookup in pre-fetched history (reverse scan for latest ≤ date)
+      let totalValuation = 0;
+      for (const asset of trackedAssets) {
+        const history = valuationHistories.get(asset.id) ?? [];
+        let latestVal: number | null = null;
+        for (let i = history.length - 1; i >= 0; i--) {
+          if (history[i].recordedDate <= date) {
+            latestVal = history[i].valuation;
+            break;
+          }
+        }
+        // Fallback to purchase price if no valuation record exists before this date
+        totalValuation += latestVal ?? asset.purchasePrice;
+      }
+
+      // 3. Unamortized cost — same strategy as hero card
+      let totalUnamortized = 0;
+      for (const asset of activeAssets) {
+        const strategy = getStrategy(asset);
+        totalUnamortized += strategy.calculateRemaining(asset, dateObj);
+      }
+
+      allPoints.push({ date, value: totalBalance + totalValuation - totalUnamortized });
     }
-    const labels = recentDates.map(d => d.substring(5));
+
+    // Downsample to ≤ MAX_POINTS preserving peaks and valleys
+    const MAX_POINTS = 24;
+    const sampled = allPoints.length > MAX_POINTS
+      ? downsamplePreservingExtrema(allPoints, MAX_POINTS)
+      : allPoints;
+
+    const labels = sampled.map(p => p.date.substring(5));
+    const points = sampled.map(p => p.value);
     setTrendData({ labels, datasets: [{ data: points }] });
-  }, [assets, timeRange]);
+  }, [assets, accounts, timeRange]);
 
   useFocusEffect(useCallback(() => {
     loadAccounts();
@@ -154,11 +223,18 @@ export default function DashboardScreen() {
   const progress = netWorthGoal ? Math.min(100, (netWorth?.netWorth ?? 0) / netWorthGoal * 100) : 0;
   const totalCatValue = categoryBreakdown.reduce((s, c) => s + c.value, 0);
 
-  const timeRangeLabels: Record<TimeRange, string> = {
-    month: '半年',
-    quarter: '一年',
-    year: '两年',
+  const timeRangeLabels: Record<TimeRangePreset, string> = {
+    '3m': '3月',
+    '6m': '6月',
+    '1y': '1年',
+    'ytd': '今年',
+    'all': '全部',
   };
+  const presetKeys: TimeRangePreset[] = ['6m', 'ytd'];
+  const isCustomRange = typeof timeRange !== 'string';
+  const rangeDisplayText = isCustomRange
+    ? `${timeRange.start.replace('-', '.')} – ${timeRange.end.replace('-', '.')}`
+    : '';
 
   return (
     <>
@@ -264,21 +340,49 @@ export default function DashboardScreen() {
             净资产趋势
           </Text>
           <View style={styles.chartHeaderRight}>
-            <View style={styles.rangeToggle}>
-              {(['month', 'quarter', 'year'] as TimeRange[]).map(r => (
-                <AppChip
-                  key={r}
-                  label={timeRangeLabels[r]}
-                  selected={timeRange === r}
-                  onPress={() => setTimeRange(r)}
-                  compact
-                  style={styles.rangeChip}
-                />
-              ))}
-            </View>
+            {isCustomRange ? (
+              /* Custom range bar: back + range text + calendar */
+              <View style={styles.customRangeBar}>
+                <TouchableOpacity
+                  onPress={() => setTimeRange('6m')}
+                  style={styles.backToPresetBtn}
+                  hitSlop={8}
+                >
+                  <Icon name="ChevronLeft" size={18} color="onSurfaceVariant" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setSheetVisible(true)} style={styles.rangeTextBtn}>
+                  <Text style={[styles.rangeTextValue, { color: theme.colors.primary }]}>
+                    {rangeDisplayText}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setSheetVisible(true)} style={styles.calendarBtn}>
+                  <Icon name="Calendar" size={18} color="onSurfaceVariant" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* Preset chips + calendar */
+              <View style={styles.rangeToggle}>
+                {presetKeys.map(r => (
+                  <AppChip
+                    key={r}
+                    label={timeRangeLabels[r]}
+                    selected={timeRange === r}
+                    onPress={() => setTimeRange(r)}
+                    compact
+                    style={styles.rangeChip}
+                  />
+                ))}
+                <TouchableOpacity
+                  onPress={() => setSheetVisible(true)}
+                  style={styles.calendarBtn}
+                >
+                  <Icon name="Calendar" size={18} color="onSurfaceVariant" />
+                </TouchableOpacity>
+              </View>
+            )}
             {trendData.datasets[0].data.length > 1 && (
               <TouchableOpacity
-                onPress={() => setFullscreenChart(true)}
+                onPress={() => { setFullscreenKey(k => k + 1); setFullscreenChart(true); }}
                 style={styles.fullscreenBtn}
               >
                 <Icon name="Maximize2" size={18} color="onSurfaceVariant" />
@@ -287,6 +391,7 @@ export default function DashboardScreen() {
           </View>
         </View>
         {trendData.datasets[0].data.length > 1 ? (
+          <>
           <InteractiveTrendChart
             data={{ labels: trendData.labels, values: trendData.datasets[0].data }}
             width={screenWidth - 64}
@@ -296,7 +401,28 @@ export default function DashboardScreen() {
             primaryColor={theme.colors.primary}
             labelColor={theme.colors.onSurfaceVariant}
             gridColor={theme.colors.surfaceVariant}
+            goalValue={netWorthGoal}
           />
+          {/* ── Period change delta ── */}
+          {(() => {
+            const data = trendData.datasets[0].data;
+            const first = data[0], last = data[data.length - 1];
+            const delta = last - first;
+            const pct = first !== 0 ? (delta / Math.abs(first) * 100) : 0;
+            const isPositive = delta >= 0;
+            return (
+              <View style={styles.deltaRow}>
+                <Text style={[styles.deltaLabel, { color: theme.colors.onSurfaceVariant }]}>
+                  期间变化
+                </Text>
+                <Text style={[styles.deltaValue, { color: isPositive ? '#00B894' : '#EA3943' }]}>
+                  {isPositive ? '+' : ''}{formatCurrency(delta, currencySymbol)}
+                  {' '}({isPositive ? '+' : ''}{pct.toFixed(1)}%)
+                </Text>
+              </View>
+            );
+          })()}
+          </>
         ) : (
           <View style={styles.emptyChart}>
             <Icon name="BarChart3" size={32} color="onSurfaceVariant" />
@@ -427,34 +553,99 @@ export default function DashboardScreen() {
             净资产趋势
           </Text>
           <View style={styles.fullscreenRange}>
-            {(['month', 'quarter', 'year'] as TimeRange[]).map(r => (
-              <AppChip
-                key={r}
-                label={timeRangeLabels[r]}
-                selected={timeRange === r}
-                onPress={() => setTimeRange(r)}
-                compact
-              />
-            ))}
+            {isCustomRange ? (
+              <TouchableOpacity onPress={() => setSheetVisible(true)} style={styles.fsCustomRange}>
+                <Text style={[styles.fsCustomRangeText, { color: theme.colors.primary }]}>
+                  {rangeDisplayText}
+                </Text>
+                <Icon name="Calendar" size={16} color="primary" />
+              </TouchableOpacity>
+            ) : (
+              <>
+                {presetKeys.map(r => (
+                  <AppChip
+                    key={r}
+                    label={timeRangeLabels[r]}
+                    selected={timeRange === r}
+                    onPress={() => setTimeRange(r)}
+                    compact
+                  />
+                ))}
+                <TouchableOpacity onPress={() => setSheetVisible(true)} style={styles.calendarBtn}>
+                  <Icon name="Calendar" size={16} color="onSurfaceVariant" />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
         {/* Chart area — flex:1 fills remaining, onLayout gives real dims */}
         <View style={styles.fullscreenChartWrap}>
           <InteractiveTrendChart
+            key={fullscreenKey}
             data={{ labels: trendData.labels, values: trendData.datasets[0].data }}
             currencySymbol={currencySymbol}
             backgroundColor={theme.colors.surface}
             primaryColor={theme.colors.primary}
             labelColor={theme.colors.onSurfaceVariant}
             gridColor={theme.colors.surfaceVariant}
-            showZoomControls
+            goalValue={netWorthGoal}
           />
         </View>
       </SafeAreaView>
     </Modal>
+
+    {/* ── Time Range Picker Sheet ── */}
+    <TimeRangeSheet
+      visible={sheetVisible}
+      onClose={() => setSheetVisible(false)}
+      onConfirm={(range) => {
+        setTimeRange(range);
+        setSheetVisible(false);
+      }}
+      currentRange={timeRange}
+    />
     </>
   );
+}
+
+/**
+ * Downsample time-series data while preserving peaks and valleys.
+ * Uses a bucket-based approach: for each bucket, keep the most extreme point
+ * (alternating min/max based on distance from neighbor average).
+ * Always preserves the first and last points.
+ */
+function downsamplePreservingExtrema(
+  points: { date: string; value: number }[],
+  maxPoints: number
+): { date: string; value: number }[] {
+  if (points.length <= maxPoints) return points;
+  const result: { date: string; value: number }[] = [points[0]];
+  const bucketCount = maxPoints - 2; // interior buckets (first and last are always kept)
+  const interiorPoints = points.slice(1, -1);
+  const bucketSize = interiorPoints.length / bucketCount;
+
+  for (let b = 0; b < bucketCount; b++) {
+    const start = Math.floor(b * bucketSize);
+    const end = Math.min(Math.floor((b + 1) * bucketSize), interiorPoints.length);
+    const bucket = interiorPoints.slice(start, end);
+    if (bucket.length === 0) continue;
+
+    // Find the point with max absolute deviation from the line between
+    // the previous kept point and the last data point
+    const prevVal = result[result.length - 1].value;
+    const lastVal = points[points.length - 1].value;
+    const avg = (prevVal + lastVal) / 2;
+    let bestIdx = 0;
+    let bestDist = -1;
+    for (let j = 0; j < bucket.length; j++) {
+      const dist = Math.abs(bucket[j].value - avg);
+      if (dist > bestDist) { bestDist = dist; bestIdx = j; }
+    }
+    result.push(bucket[bestIdx]);
+  }
+  result.push(points[points.length - 1]);
+  return result;
 }
 
 const styles = StyleSheet.create({
@@ -502,6 +693,10 @@ const styles = StyleSheet.create({
   emptyChart: { height: 180, alignItems: 'center', justifyContent: 'center', gap: 8 },
   emptyText: { fontSize: 15, fontWeight: '500' },
   emptySubtext: { fontSize: 12 },
+  // Delta row
+  deltaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingHorizontal: 4 },
+  deltaLabel: { fontSize: 13 },
+  deltaValue: { fontSize: 14, fontWeight: '600' },
   // Cost
   costInner: { borderRadius: 12, padding: 16, marginTop: 8 },
   costRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
@@ -540,6 +735,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fullscreenRange: { flexDirection: 'row' },
+  fullscreenRange: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   fullscreenChartWrap: { flex: 1, paddingHorizontal: 8, paddingBottom: 4 },
+  // Custom range controls
+  calendarBtn: { padding: 6 },
+  backToPresetBtn: { padding: 4 },
+  rangeTextBtn: { paddingHorizontal: 4 },
+  rangeTextValue: { fontSize: 13, fontWeight: '600' },
+  customRangeBar: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  fsCustomRange: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  fsCustomRangeText: { fontSize: 13, fontWeight: '600' },
 });

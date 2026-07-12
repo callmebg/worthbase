@@ -7,7 +7,7 @@ import { AccountRepository } from '@/db/account-repository';
 import { AssetRepository } from '@/db/asset-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { getStrategy } from './strategies';
-import type { NetWorthResult, NetWorthTrendPoint, Asset } from '@/types/models';
+import type { NetWorthResult } from '@/types/models';
 import { AssetStatus } from '@/types/enums';
 
 export const NetWorthCalculator = {
@@ -49,26 +49,6 @@ export const NetWorthCalculator = {
       assetValuations,
       unamortizedCost,
       netWorth,
-    };
-  },
-
-  /**
-   * Calculate net worth for a specific date (using historical snapshots).
-   * Used for generating trend chart data points.
-   */
-  async calculateForDate(date: string, assets: Asset[]): Promise<NetWorthTrendPoint> {
-    // For historical points, we use the balance snapshots for that date
-    // and the asset valuations as of that date
-    // This is a simplified version - in production we'd need historical asset data
-    const liquidAssets = 0; // Would come from BalanceSnapshotRepository
-    const assetValuations = 0; // Would come from ValuationRepository for that date
-    const unamortizedCost = 0;
-
-    return {
-      date,
-      liquidAssets,
-      assetValuations,
-      netWorth: liquidAssets + assetValuations - unamortizedCost,
     };
   },
 

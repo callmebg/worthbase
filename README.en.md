@@ -31,12 +31,6 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 
 ---
 
-## star
-
-[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase) 
-
----
-
 ## Features
 
 ### Account Balance Management
@@ -71,6 +65,11 @@ Holding cost = Depreciation + Recurring expenses (active items for current month
 - **One-time maintenance**: Repairs, servicing — optionally included in cost allocation
 - **Monthly & daily views**: See both monthly holding cost and daily cost
 - **Summary panel**: Total monthly holding cost across all assets
+
+<p align="center">
+  <img src="./docs/screenshots/calc.jpg" alt="Holding cost calculation" width="200">
+  <img src="./docs/screenshots/calc2.jpg" alt="Holding cost details" width="200">
+</p>
 
 ### Data Security
 - **Fully local storage**: No server, no registration, no data upload
@@ -118,6 +117,7 @@ Holding cost = Depreciation + Recurring expenses (active items for current month
 ### Install Dependencies
 
 ```bash
+git clone https://github.com/callmebg/worthbase.git
 cd worthbase
 npm install
 ```
@@ -141,6 +141,15 @@ npm run android
 # iOS (macOS only, requires Xcode)
 npm run ios
 ```
+
+---
+
+## Download
+
+| Platform | Method |
+|----------|--------|
+| Android | Download APK from [GitHub Releases](https://github.com/callmebg/worthbase/releases) |
+| iOS | Self-build via EAS (Apple distribution restrictions) |
 
 ---
 
@@ -208,6 +217,8 @@ worthbase/
 │   ├── components/             # UI components
 │   │   ├── ui/                 #   Base UI kit (Button, Card, Chip, FAB, BottomSheet, etc.)
 │   │   ├── AddAssetModal.tsx   #   3-step add asset form
+│   │   ├── DatePickerField.tsx #   Date picker component
+│   │   ├── TimeRangeSheet.tsx  #   Time range selection bottom sheet
 │   │   ├── AssetDetailModal.tsx#   Asset detail modal
 │   │   ├── SettlementModal.tsx #   Sell settlement modal
 │   │   ├── HoldingCostBreakdown.tsx # 3-layer holding cost breakdown
@@ -234,6 +245,7 @@ worthbase/
 │   ├── types/                  # Type definitions (enums, models)
 │   └── utils/                  # Utilities (crypto / formatting / validation)
 ├── __tests__/                  # Unit tests (7 suites / 158 cases)
+│   ├── helpers/                #   Test utilities (mock-database, etc.)
 ├── assets/                     # App icons and splash screen
 ├── app.json                    # Expo config
 ├── eas.json                    # EAS Build config
@@ -273,12 +285,6 @@ The engine computes everything **in real-time** — no pre-stored results. Costs
 
 ---
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)
-
----
-
 ## Contributing
 
 Issues and Pull Requests are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
@@ -293,6 +299,57 @@ For security issues, please see [SECURITY.md](./SECURITY.md).
 
 ---
 
+## Development Guide
+
+### Adding a New Depreciation Strategy
+
+1. Create a new strategy file in `src/engine/strategies/`, implementing the `AmortizationStrategy` interface:
+
+```typescript
+// src/engine/strategies/MyNewStrategy.ts
+import type { AmortizationStrategy } from './AmortizationStrategy';
+import type { Asset } from '@/types/models';
+
+export const MyNewStrategy: AmortizationStrategy = {
+  calculateMonthlyCost(asset: Asset, currentDate: Date): number { /* ... */ },
+  calculateAccumulated(asset: Asset, currentDate: Date): number { /* ... */ },
+  calculateRemaining(asset: Asset, currentDate: Date): number { /* ... */ },
+};
+```
+
+2. Add the new type to `AmortizationType` enum in `src/types/enums.ts`
+3. Register it in the `strategyMap` in `src/engine/strategies/index.ts`
+4. Add unit tests in `__tests__/engine.test.ts`
+
+### Database Migrations
+
+When modifying the schema, add a new migration in `src/db/migrations.ts`:
+
+```typescript
+{
+  version: 3,                // Increment version number
+  description: 'Describe the change',
+  up: async (db) => {
+    await db.execAsync(`ALTER TABLE xxx ADD COLUMN yyy TEXT;`);
+  },
+},
+```
+
+Migrations must be **idempotent** (safe to run multiple times). Update the `CURRENT_VERSION` constant accordingly.
+
+### Code Conventions
+- Run tests: `npm test`
+- TypeScript strict mode, path alias `@/` → `src/`
+- New features should include unit tests to maintain coverage
+
+---
+
 ## License
 
 [MIT](./LICENSE) © callmebg
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=callmebg/worthbase&type=Date)](https://star-history.com/#callmebg/worthbase)

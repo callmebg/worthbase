@@ -2,7 +2,7 @@
   "expo": {
     "name": "家底 WorthBase",
     "slug": "worthbase",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "worthbase",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

@@ -6,7 +6,7 @@
  * with react-native-svg for rendering. No gesture composition issues.
  */
 
-import React, { useRef, useState, useMemo, useCallback } from 'react';
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Svg, {
   Path as SvgPath,
@@ -15,14 +15,17 @@ import Svg, {
   LinearGradient as SvgLinearGradient,
   Stop,
   Circle as SvgCircle,
+  Text as SvgText,
+  Rect as SvgRect,
 } from 'react-native-svg';
 import {
   PanGestureHandler,
   PinchGestureHandler,
+  TapGestureHandler,
   type PanGestureHandlerGestureEvent,
   type PinchGestureHandlerGestureEvent,
 } from 'react-native-gesture-handler';
-import { formatCompactCurrency } from '@/utils/format';
+import { formatCurrency, formatCompactCurrency } from '@/utils/format';
 
 /* ── types ──────────────────────────────────────────────── */
 
@@ -43,6 +46,7 @@ interface Props {
   showZoomControls?: boolean;
   yAxisWidth?: number;
   xAxisHeight?: number;
+  goalValue?: number | null;
 }
 
 /* ── constants ──────────────────────────────────────────── */
@@ -65,6 +69,7 @@ export const InteractiveTrendChart: React.FC<Props> = ({
   showZoomControls = false,
   yAxisWidth = 56,
   xAxisHeight = 24,
+  goalValue = null,
 }) => {
   const totalPoints = data.values.length;
 
@@ -88,11 +93,20 @@ export const InteractiveTrendChart: React.FC<Props> = ({
 
   const [windowStart, setWindowStart] = useState(0);
   const [windowSize, setWindowSize] = useState(totalPoints);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
+  // Reset window when data length changes (e.g. new time range)
+  useEffect(() => {
+    setWindowStart(0);
+    setWindowSize(totalPoints);
+    setSelectedIndex(null);
+  }, [totalPoints]);
 
   // Gesture-start snapshots (refs avoid stale closures)
   const panStartRef = useRef(0);
   const panWsRef = useRef(0);
   const pinchStartRef = useRef(totalPoints);
+  const pinchCenterRef = useRef(totalPoints / 2);
 
   /* ── visible data ─────────────────────────────────────── */
 
@@ -109,10 +123,10 @@ export const InteractiveTrendChart: React.FC<Props> = ({
 
   /* ── SVG paths + labels ───────────────────────────────── */
 
-  const { lineD, areaD, yLabels, dots, splitPct } = useMemo(() => {
+  const { lineD, areaD, yLabels, gridLines, dots, splitPct, goalLine, selectedDot } = useMemo(() => {
     const n = visValues.length;
     if (n < 2)
-      return { lineD: '', areaD: '', yLabels: [] as { label: string; y: number }[], dots: [] as { cx: number; cy: number }[], splitPct: 0.5 };
+      return { lineD: '', areaD: '', yLabels: [] as { label: string; y: number }[], gridLines: [] as { y: number }[], dots: [] as { cx: number; cy: number }[], splitPct: 0.5, goalLine: null as { y: number; label: string } | null, selectedDot: null as { cx: number; cy: number; value: number; label: string } | null };
 
     const minV = Math.min(...visValues);
     const maxV = Math.max(...visValues);
@@ -133,16 +147,39 @@ export const InteractiveTrendChart: React.FC<Props> = ({
 
     const dots = visValues.map((v, i) => ({ cx: toX(i), cy: toY(v) }));
 
-    const yLabels: { label: string; y: number }[] = [];
+    // Y-axis labels with overlap prevention
+    const MIN_LABEL_GAP = 16;
+    const allYLabels: { label: string; y: number }[] = [];
     for (let i = 0; i <= Y_LABEL_COUNT; i++) {
       const val = minV + (rangeV * i) / Y_LABEL_COUNT;
-      yLabels.push({ label: formatCompactCurrency(val, currencySymbol), y: toY(val) });
+      allYLabels.push({ label: formatCompactCurrency(val, currencySymbol), y: toY(val) });
     }
+    const yLabels: typeof allYLabels = [allYLabels[0]];
+    for (let i = 1; i < allYLabels.length - 1; i++) {
+      if (Math.abs(allYLabels[i].y - yLabels[yLabels.length - 1].y) >= MIN_LABEL_GAP) {
+        yLabels.push(allYLabels[i]);
+      }
+    }
+    // Always include the last label (max value)
+    const lastLabel = allYLabels[allYLabels.length - 1];
+    if (Math.abs(lastLabel.y - yLabels[yLabels.length - 1].y) >= MIN_LABEL_GAP) {
+      yLabels.push(lastLabel);
+    }
+
+    // Goal line (only if within visible range)
+    const goalLine = goalValue != null && goalValue >= minV && goalValue <= maxV
+      ? { y: toY(goalValue), label: formatCompactCurrency(goalValue, currencySymbol) }
+      : null;
+
+    // Selected point tooltip
+    const selectedDot = selectedIndex != null && selectedIndex >= 0 && selectedIndex < visValues.length
+      ? { cx: toX(selectedIndex), cy: toY(visValues[selectedIndex]), value: visValues[selectedIndex], label: visLabels[selectedIndex] }
+      : null;
 
     const splitPct = Math.max(0.05, Math.min(0.95, (maxV - visValues[0]) / rangeV));
 
-    return { lineD: ld, areaD: ad, yLabels, dots, splitPct };
-  }, [visValues, chartW, chartH, currencySymbol]);
+    return { lineD: ld, areaD: ad, yLabels, gridLines: allYLabels, dots, splitPct, goalLine, selectedDot };
+  }, [visValues, visLabels, chartW, chartH, currencySymbol, goalValue, selectedIndex]);
 
   /* ── X-axis labels ────────────────────────────────────── */
 
@@ -152,43 +189,62 @@ export const InteractiveTrendChart: React.FC<Props> = ({
     return visLabels.filter((_, i) => i % step === 0 || i === visLabels.length - 1);
   }, [visLabels, chartW]);
 
-  /* ── gesture handlers (old API – reliable) ────────────── */
+  /* ── gesture handlers (old API) ───────────────────────────
+   * onHandlerStateChange fires on BEGAN / END transitions.
+   * onGestureEvent fires continuously during ACTIVE only.
+   * We MUST use onHandlerStateChange to capture the start values,
+   * otherwise the first ACTIVE frame uses stale ref = 0.
+   */
+
+  const onPanStateChange = useCallback(
+    (e: any) => {
+      const { state, translationX } = e.nativeEvent;
+      if (state === 2) {
+        // BEGAN: snapshot starting position
+        panStartRef.current = translationX;
+        panWsRef.current = windowStart;
+      }
+    },
+    [windowStart]
+  );
 
   const onPan = useCallback(
     (e: PanGestureHandlerGestureEvent) => {
-      const { state, translationX } = e.nativeEvent;
-      // state: 2=BEGAN, 4=ACTIVE, 5=END, 6=FAILED
-      if (state === 2) {
-        panStartRef.current = translationX;
-        panWsRef.current = windowStart;
-      } else if (state === 4) {
-        const delta = translationX - panStartRef.current;
-        const ptsPerPx = windowSize / chartW;
-        const shift = Math.round(-delta * ptsPerPx);
-        const next = Math.max(0, Math.min(totalPoints - windowSize, panWsRef.current + shift));
-        setWindowStart(next);
-      }
-      // state 5 (END): windowStart is already set
+      // Only ACTIVE events arrive here
+      const delta = e.nativeEvent.translationX - panStartRef.current;
+      const ptsPerPx = windowSize / chartW;
+      const shift = Math.round(-delta * ptsPerPx);
+      const next = Math.max(0, Math.min(totalPoints - windowSize, panWsRef.current + shift));
+      setWindowStart(next);
     },
-    [windowStart, windowSize, chartW, totalPoints]
+    [windowSize, chartW, totalPoints]
+  );
+
+  const onPinchStateChange = useCallback(
+    (e: any) => {
+      const { state } = e.nativeEvent;
+      if (state === 2) {
+        // BEGAN: snapshot current zoom level & center
+        pinchStartRef.current = windowSize;
+        pinchCenterRef.current = windowStart + windowSize / 2;
+      }
+    },
+    [windowStart, windowSize]
   );
 
   const onPinch = useCallback(
     (e: PinchGestureHandlerGestureEvent) => {
-      const { state, scale } = e.nativeEvent;
-      if (state === 2) {
-        pinchStartRef.current = windowSize;
-      } else if (state === 4) {
-        // pinch-out: scale > 1 → fewer points (zoom in)
-        const newN = Math.max(MIN_VISIBLE, Math.min(totalPoints, Math.round(pinchStartRef.current / scale)));
-        const center = windowStart + windowSize / 2;
-        let start = Math.round(center - newN / 2);
-        start = Math.max(0, Math.min(totalPoints - newN, start));
-        setWindowSize(newN);
-        setWindowStart(start);
-      }
+      // Only ACTIVE events arrive here
+      const newN = Math.max(
+        MIN_VISIBLE,
+        Math.min(totalPoints, Math.round(pinchStartRef.current / e.nativeEvent.scale))
+      );
+      let start = Math.round(pinchCenterRef.current - newN / 2);
+      start = Math.max(0, Math.min(totalPoints - newN, start));
+      setWindowSize(newN);
+      setWindowStart(start);
     },
-    [windowStart, windowSize, totalPoints]
+    [totalPoints]
   );
 
   /* ── zoom buttons ─────────────────────────────────────── */
@@ -207,10 +263,28 @@ export const InteractiveTrendChart: React.FC<Props> = ({
     setWindowStart(Math.max(0, Math.min(totalPoints - n, Math.round(c - n / 2))));
   }, [windowSize, windowStart, totalPoints]);
 
+  /* ── tap handler for tooltip ──────────────────────────── */
+
+  const onTap = useCallback(
+    (e: any) => {
+      if (e.nativeEvent.state !== 4) return; // only END state
+      const x = e.nativeEvent.x - PAD;
+      const drawW = chartW - PAD * 2;
+      const n = visValues.length;
+      if (n < 2 || drawW <= 0) return;
+      const xStep = drawW / (n - 1);
+      const idx = Math.round(x / xStep);
+      const clampedIdx = Math.max(0, Math.min(n - 1, idx));
+      setSelectedIndex(prev => prev === clampedIdx ? null : clampedIdx);
+    },
+    [visValues.length, chartW]
+  );
+
   /* ── refs for nested handlers ─────────────────────────── */
 
   const pinchRef = useRef(null);
   const panRef = useRef(null);
+  const tapRef = useRef(null);
 
   /* ── empty state ──────────────────────────────────────── */
 
@@ -270,18 +344,26 @@ export const InteractiveTrendChart: React.FC<Props> = ({
           ))}
         </View>
 
-        {/* Pinch → Pan → SVG */}
+        {/* Pinch → Pan → Tap → SVG */}
         <PinchGestureHandler
           ref={pinchRef}
+          onHandlerStateChange={onPinchStateChange}
           onGestureEvent={onPinch}
-          simultaneousHandlers={panRef}
+          simultaneousHandlers={[panRef, tapRef]}
         >
           <PanGestureHandler
             ref={panRef}
+            onHandlerStateChange={onPanStateChange}
             onGestureEvent={onPan}
-            simultaneousHandlers={pinchRef}
+            simultaneousHandlers={[pinchRef, tapRef]}
             minDist={8}
           >
+            <TapGestureHandler
+              ref={tapRef}
+              onHandlerStateChange={onTap}
+              simultaneousHandlers={[pinchRef, panRef]}
+              numberOfTaps={1}
+            >
             <View style={[styles.svgWrap, { width: chartW, height: chartH, backgroundColor }]}>
               <Svg width={chartW} height={chartH}>
                 <Defs>
@@ -293,8 +375,8 @@ export const InteractiveTrendChart: React.FC<Props> = ({
                   </SvgLinearGradient>
                 </Defs>
 
-                {/* Grid lines */}
-                {yLabels.map((item, i) => (
+                {/* Grid lines (use all positions for dense grid) */}
+                {gridLines.map((item, i) => (
                   <SvgLine
                     key={`g${i}`}
                     x1={PAD}
@@ -305,6 +387,25 @@ export const InteractiveTrendChart: React.FC<Props> = ({
                     strokeWidth={0.5}
                   />
                 ))}
+
+                {/* Goal line */}
+                {goalLine && (
+                  <>
+                    <SvgLine
+                      x1={PAD} y1={goalLine.y}
+                      x2={chartW - PAD} y2={goalLine.y}
+                      stroke="#FDCB6E"
+                      strokeWidth={1.5}
+                      strokeDasharray="6,4"
+                    />
+                    <SvgText
+                      x={chartW - PAD - 4} y={goalLine.y - 4}
+                      textAnchor="end" fill="#FDCB6E" fontSize={10}
+                    >
+                      目标 {goalLine.label}
+                    </SvgText>
+                  </>
+                )}
 
                 {/* Area fill */}
                 {areaD ? <SvgPath d={areaD} fill={`url(#${gradId})`} /> : null}
@@ -333,8 +434,50 @@ export const InteractiveTrendChart: React.FC<Props> = ({
                     strokeWidth={2}
                   />
                 ))}
+
+                {/* Selected point tooltip */}
+                {selectedDot && (
+                  <>
+                    {/* Vertical crosshair */}
+                    <SvgLine
+                      x1={selectedDot.cx} y1={PAD}
+                      x2={selectedDot.cx} y2={chartH - PAD}
+                      stroke={labelColor} strokeWidth={1}
+                      strokeDasharray="3,3" opacity={0.5}
+                    />
+                    {/* Highlighted circle */}
+                    <SvgCircle
+                      cx={selectedDot.cx} cy={selectedDot.cy}
+                      r={6} fill={primaryColor} stroke="#fff" strokeWidth={2}
+                    />
+                    {/* Tooltip background */}
+                    <SvgRect
+                      x={Math.min(Math.max(selectedDot.cx - 54, PAD), chartW - PAD - 108)}
+                      y={Math.max(selectedDot.cy - 44, PAD)}
+                      width={108} height={36} rx={6}
+                      fill="rgba(0,0,0,0.82)"
+                    />
+                    {/* Tooltip value */}
+                    <SvgText
+                      x={Math.min(Math.max(selectedDot.cx, PAD + 54), chartW - PAD - 54)}
+                      y={Math.max(selectedDot.cy - 28, PAD + 14)}
+                      textAnchor="middle" fill="#fff" fontSize={12} fontWeight="600"
+                    >
+                      {formatCurrency(selectedDot.value, currencySymbol)}
+                    </SvgText>
+                    {/* Tooltip date */}
+                    <SvgText
+                      x={Math.min(Math.max(selectedDot.cx, PAD + 54), chartW - PAD - 54)}
+                      y={Math.max(selectedDot.cy - 14, PAD + 28)}
+                      textAnchor="middle" fill="#aaa" fontSize={9}
+                    >
+                      {selectedDot.label}
+                    </SvgText>
+                  </>
+                )}
               </Svg>
             </View>
+            </TapGestureHandler>
           </PanGestureHandler>
         </PinchGestureHandler>
       </View>
