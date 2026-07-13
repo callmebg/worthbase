@@ -35,10 +35,14 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Restore Android SDK cache
+      - name: Restore Android SDK subdirs cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/android-sdk
+          path: |
+            ${{ runner.temp }}/android-sdk/cmdline-tools
+            ${{ runner.temp }}/android-sdk/platforms
+            ${{ runner.temp }}/android-sdk/build-tools
+            ${{ runner.temp }}/android-sdk/platform-tools
           key: android-sdk-${{ runner.os }}-v1
           restore-keys: |
             android-sdk-${{ runner.os }}-
@@ -51,10 +55,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends unzip wget lib32stdc++6 lib32z1
           export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
-          if [ -d "$ANDROID_SDK_ROOT/platform-tools" ] && [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
-            echo "Android SDK already present in cache, skipping download.";
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          if [ -d "$ANDROID_SDK_ROOT/platform-tools" ] && [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ] && [ -d "$ANDROID_SDK_ROOT/platforms/android-33" ] && [ -d "$ANDROID_SDK_ROOT/build-tools/33.0.2" ]; then
+            echo "Android SDK components already present in cache, skipping download.";
           else
-            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
             cd "$ANDROID_SDK_ROOT/cmdline-tools"
             curl -fSL "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip" -o cmdline-tools.zip
             unzip -q cmdline-tools.zip
@@ -64,16 +68,20 @@ jobs:
               mkdir -p latest
               mv * latest 2>/dev/null || true
             fi
+            export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+            yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
+            sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
           fi
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
-          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
-          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
-      - name: Save Android SDK to cache
+      - name: Save Android SDK subdirs to cache
         if: always()
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/android-sdk
+          path: |
+            ${{ runner.temp }}/android-sdk/cmdline-tools
+            ${{ runner.temp }}/android-sdk/platforms
+            ${{ runner.temp }}/android-sdk/build-tools
+            ${{ runner.temp }}/android-sdk/platform-tools
           key: android-sdk-${{ runner.os }}-v1
 
       - name: Show sdkmanager info
