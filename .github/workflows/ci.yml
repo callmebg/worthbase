@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+permissions: read-all
+
+env:
+  CI: true
+
+jobs:
+  test-and-eas-build:
+    name: Test and (optional) EAS Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Run EAS build (Android preview)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "${EXPO_TOKEN}" ]; then
+            echo "EXPO_TOKEN is not set — skipping EAS build. To enable, add EXPO_TOKEN as a repository secret.";
+            exit 0;
+          fi
+          # Ensure we're logged in
+          eas whoami || eas login --token "$EXPO_TOKEN"
+          # Build Android using the 'preview' profile defined in eas.json
+          eas build --profile preview --platform android --non-interactive
+
+      - name: Finish
+        run: echo "Workflow finished. If EAS build ran, check EAS dashboard or logs for artifact URLs."
