@@ -62,7 +62,7 @@ export const NetWorthCalculator = {
     if (!goal || goal <= 0) {
       return { percentage: 0, isOnTrack: false };
     }
-    const percentage = Math.min(100, (currentNetWorth / goal) * 100);
+    const percentage = (currentNetWorth / goal) * 100;
     return { percentage, isOnTrack: percentage >= 100 };
   },
 };

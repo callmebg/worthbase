@@ -26,10 +26,14 @@ import { AppChip } from '@/components/ui/Chip';
 import { AppBottomSheet, BottomSheetTextInput } from '@/components/ui/BottomSheet';
 import type { AppBottomSheetRef } from '@/components/ui/BottomSheet';
 import { Icon } from '@/components/ui/Icon';
+import { isValidPositiveNumber } from '@/utils/validation';
+import { useToast } from '@/hooks/useToast';
+import { spacing } from '@/theme/tokens';
 
 export default function AccountsScreen() {
   const theme = useAppTheme();
-  const { accounts, balances, loadAccounts, addAccount, editAccount, updateBalance, deleteAccount } = useAccountStore();
+  const toast = useToast();
+  const { accounts, balances, loadAccounts, addAccount, editAccount, updateBalance, deleteAccount, hardDelete } = useAccountStore();
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [updateTarget, setUpdateTarget] = useState<Account | null>(null);
   const [editTarget, setEditTarget] = useState<Account | null>(null);
@@ -43,21 +47,43 @@ export default function AccountsScreen() {
     try {
       await updateBalance(accountId, balance);
       setUpdateTarget(null);
+      toast.show('余额已更新', 'success');
     } catch (err) {
       Alert.alert('更新失败', (err as Error).message);
     }
   };
 
-  const handleDelete = (account: Account) => {
+  const handleArchive = (account: Account) => {
     Alert.alert(
-      '删除账户',
-      `确定要删除"${account.name}"吗？相关的余额历史也会被删除。`,
+      '存档账户',
+      `确定要存档"${account.name}"吗？存档后账户将被隐藏，但历史余额数据将保留。`,
       [
         { text: '取消', style: 'cancel' },
         {
-          text: '删除', style: 'destructive', onPress: async () => {
+          text: '存档', style: 'destructive', onPress: async () => {
             try {
               await deleteAccount(account.id);
+              toast.show('账户已存档', 'success');
+            } catch (err) {
+              Alert.alert('存档失败', (err as Error).message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleHardDelete = (account: Account) => {
+    Alert.alert(
+      '彻底删除账户',
+      '此操作不可撤销，该账户及其所有余额记录将被永久删除。确定继续？',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '彻底删除', style: 'destructive', onPress: async () => {
+            try {
+              await hardDelete(account.id);
+              toast.show('账户已删除', 'success');
             } catch (err) {
               Alert.alert('删除失败', (err as Error).message);
             }
@@ -67,13 +93,26 @@ export default function AccountsScreen() {
     );
   };
 
+  const handleLongPress = (account: Account) => {
+    Alert.alert(
+      account.name,
+      undefined,
+      [
+        { text: '编辑', onPress: () => setEditTarget(account) },
+        { text: '存档', style: 'destructive', onPress: () => handleArchive(account) },
+        { text: '彻底删除', style: 'destructive', onPress: () => handleHardDelete(account) },
+        { text: '取消', style: 'cancel' },
+      ],
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Total Balance Hero Card */}
       <View style={[styles.totalCard, { backgroundColor: theme.colors.primary }]}>
-        <Text style={styles.totalLabel}>流动资产总计</Text>
-        <Text style={styles.totalAmount}>{formatCurrency(totalBalance)}</Text>
-        <Text style={styles.accountCount}>{accounts.length} 个账户</Text>
+        <Text style={[styles.totalLabel, { color: theme.colors.onPrimary }]}>流动资产总计</Text>
+        <Text style={[styles.totalAmount, { color: theme.colors.onPrimary }]}>{formatCurrency(totalBalance)}</Text>
+        <Text style={[styles.accountCount, { color: theme.colors.onPrimary }]}>{accounts.length} 个账户</Text>
       </View>
 
       {/* Account List */}
@@ -84,7 +123,7 @@ export default function AccountsScreen() {
         renderItem={({ item }) => (
           <AppCard
             onPress={() => setUpdateTarget(item)}
-            onLongPress={() => setEditTarget(item)}
+            onLongPress={() => handleLongPress(item)}
             style={styles.accountCard}
           >
             <View style={styles.cardHeader}>
@@ -138,10 +177,11 @@ export default function AccountsScreen() {
       <AddAccountSheet
         visible={showAddSheet}
         onClose={() => setShowAddSheet(false)}
-        onAdd={async (name, type) => {
+        onAdd={async (name, type, initialBalance) => {
           try {
-            await addAccount(name, type);
+            await addAccount(name, type, null, initialBalance);
             setShowAddSheet(false);
+            toast.show('账户已添加', 'success');
           } catch (err) {
             Alert.alert('添加失败', (err as Error).message);
           }
@@ -170,13 +210,18 @@ export default function AccountsScreen() {
           try {
             await editAccount(id, { name, type });
             setEditTarget(null);
+            toast.show('已保存', 'success');
           } catch (err) {
             Alert.alert('保存失败', (err as Error).message);
           }
         }}
-        onDelete={(account) => {
+        onArchive={(account) => {
           setEditTarget(null);
-          handleDelete(account);
+          handleArchive(account);
+        }}
+        onHardDelete={(account) => {
+          setEditTarget(null);
+          handleHardDelete(account);
         }}
       />
     </View>
@@ -188,15 +233,19 @@ export default function AccountsScreen() {
 function AddAccountSheet({ visible, onClose, onAdd }: {
   visible: boolean;
   onClose: () => void;
-  onAdd: (name: string, type: AccountType) => void;
+  onAdd: (name: string, type: AccountType, initialBalance?: number) => void;
 }) {
   const theme = useAppTheme();
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>(AccountType.WECHAT);
+  const [initialBalance, setInitialBalance] = useState('');
   const types = Object.values(AccountType);
 
+  const balanceError =
+    initialBalance && !isValidPositiveNumber(initialBalance) ? '请输入有效金额' : '';
+
   return (
-    <AppBottomSheet visible={visible} onClose={onClose} snapPoints={['60%', '85%']}>
+    <AppBottomSheet visible={visible} onClose={onClose} snapPoints={['70%', '90%']}>
       <Text style={[styles.sheetTitle, { color: theme.colors.onSurface }]}>添加账户</Text>
       <AppTextInput bottomSheet
         label="账户名称"
@@ -216,13 +265,31 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
           />
         ))}
       </View>
+      <AppTextInput bottomSheet
+        label="初始余额（可选）"
+        value={initialBalance}
+        onChangeText={setInitialBalance}
+        placeholder="0.00"
+        keyboardType="decimal-pad"
+        error={balanceError}
+      />
       <View style={styles.sheetActions}>
         <AppButton title="取消" variant="text" onPress={onClose} style={styles.sheetBtn} />
         <AppButton
           title="确认"
           variant="primary"
           disabled={!name.trim()}
-          onPress={() => { onAdd(name.trim(), type); setName(''); }}
+          onPress={() => {
+            onAdd(
+              name.trim(),
+              type,
+              initialBalance && isValidPositiveNumber(initialBalance)
+                ? parseFloat(initialBalance)
+                : undefined,
+            );
+            setName('');
+            setInitialBalance('');
+          }}
           style={styles.sheetBtn}
         />
       </View>
@@ -321,18 +388,19 @@ function BalanceHistorySheet({ visible, onClose }: {
           );
         }}
       />
-      <AppButton title="关闭" variant="primary" onPress={onClose} style={{ marginTop: 16 }} />
+      <AppButton title="关闭" variant="primary" onPress={onClose} style={{ marginTop: spacing.md }} />
     </AppBottomSheet>
   );
 }
 
 // ── Edit Account BottomSheet ──
 
-function EditAccountSheet({ account, onClose, onSave, onDelete }: {
+function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }: {
   account: Account | null;
   onClose: () => void;
   onSave: (id: string, name: string, type: AccountType) => void;
-  onDelete: (account: Account) => void;
+  onArchive: (account: Account) => void;
+  onHardDelete: (account: Account) => void;
 }) {
   const theme = useAppTheme();
   const [name, setName] = useState('');
@@ -379,11 +447,18 @@ function EditAccountSheet({ account, onClose, onSave, onDelete }: {
         />
       </View>
       <AppButton
-        title="删除此账户"
+        title="存档此账户"
+        variant="secondary"
+        icon="Archive"
+        onPress={() => onArchive(account)}
+        style={{ marginTop: 12 }}
+      />
+      <AppButton
+        title="彻底删除"
         variant="danger"
         icon="Trash2"
-        onPress={() => onDelete(account)}
-        style={{ marginTop: 12 }}
+        onPress={() => onHardDelete(account)}
+        style={{ marginTop: spacing.sm }}
       />
     </AppBottomSheet>
   );
@@ -392,41 +467,41 @@ function EditAccountSheet({ account, onClose, onSave, onDelete }: {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   totalCard: {
-    padding: 24,
+    padding: spacing.lg,
     alignItems: 'center',
     borderRadius: 16,
-    margin: 16,
+    margin: spacing.md,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 12,
     elevation: 4,
   },
-  totalLabel: { color: '#fff', fontSize: 14, opacity: 0.85 },
-  totalAmount: { color: '#fff', fontSize: 32, fontWeight: '700', marginTop: 4 },
-  accountCount: { color: '#fff', fontSize: 12, opacity: 0.6, marginTop: 4 },
-  list: { paddingHorizontal: 16, paddingBottom: 100 },
-  accountCard: { marginBottom: 12 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  cardInfo: { flex: 1, marginLeft: 12 },
+  totalLabel: { fontSize: 14, opacity: 0.85 },
+  totalAmount: { fontSize: 32, fontWeight: '700', marginTop: spacing.xs },
+  accountCount: { fontSize: 12, opacity: 0.6, marginTop: spacing.xs },
+  list: { paddingHorizontal: spacing.md, paddingBottom: 100 },
+  accountCard: { marginBottom: spacing.sm + spacing.xs },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+  cardInfo: { flex: 1, marginLeft: spacing.sm + spacing.xs },
   cardName: { fontSize: 16, fontWeight: '600' },
   cardType: { fontSize: 12, marginTop: 2 },
-  cardBalance: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
-  updateBtn: { marginTop: 4 },
-  actions: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, paddingBottom: 16 },
+  cardBalance: { fontSize: 24, fontWeight: '700', marginBottom: spacing.sm + spacing.xs },
+  updateBtn: { marginTop: spacing.xs },
+  actions: { flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm + spacing.xs, paddingBottom: spacing.md },
   actionBtn: { flex: 1 },
   // Sheet styles
-  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 16 },
-  sheetSubtitle: { fontSize: 16, marginBottom: 4 },
-  currentBalance: { fontSize: 14, marginBottom: 12 },
-  label: { fontSize: 14, marginBottom: 8 },
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 20 },
-  sheetActions: { flexDirection: 'row', gap: 12 },
+  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: spacing.md },
+  sheetSubtitle: { fontSize: 16, marginBottom: spacing.xs },
+  currentBalance: { fontSize: 14, marginBottom: spacing.sm + spacing.xs },
+  label: { fontSize: 14, marginBottom: spacing.sm },
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md + spacing.xs },
+  sheetActions: { flexDirection: 'row', gap: spacing.sm + spacing.xs },
   sheetBtn: { flex: 1 },
   // History
   historyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: spacing.sm + spacing.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   historyDate: { fontSize: 14 },

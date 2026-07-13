@@ -177,11 +177,20 @@ eas build --profile preview --platform ios
 ### Local Build
 
 ```bash
+# Generate native project
 npx expo prebuild --platform android
+
+# Build Release APK (universal, all architectures, larger size)
 cd android && ./gradlew assembleRelease
+
+# Build for specific architecture (recommended, smaller size)
+./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a      # 64-bit only (modern devices)
+./gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a   # 32-bit only (legacy devices)
+./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a  # Both architectures
 ```
 
 > Requires `JAVA_HOME` pointing to JDK 17+ and `ANDROID_HOME` set to Android SDK.
+> Specifying a single architecture reduces APK size from ~150 MB to ~65 MB.
 
 ---
 

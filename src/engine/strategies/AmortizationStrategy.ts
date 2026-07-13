@@ -41,12 +41,12 @@ export interface AmortizationStrategy {
  * E.g., Jan 15 to Jul 15 = 6 months; Jan 15 to Jan 16 = 1 month.
  */
 export function monthsBetween(startDate: string, endDate: Date): number {
-  const start = new Date(startDate);
-  const yearDiff = endDate.getFullYear() - start.getFullYear();
-  const monthDiff = endDate.getMonth() - start.getMonth();
+  const start = new Date(startDate + 'T00:00:00Z');
+  const yearDiff = endDate.getUTCFullYear() - start.getUTCFullYear();
+  const monthDiff = endDate.getUTCMonth() - start.getUTCMonth();
   let months = yearDiff * 12 + monthDiff;
   // Count the start month as month 1
-  if (endDate.getDate() >= start.getDate()) {
+  if (endDate.getUTCDate() >= start.getUTCDate()) {
     months += 1;
   } else {
     months += 0; // partial month still counts as a month held
@@ -59,7 +59,7 @@ export function monthsBetween(startDate: string, endDate: Date): number {
  * Utility: calculate the number of days between two dates.
  */
 export function daysBetween(startDate: string, endDate: Date): number {
-  const start = new Date(startDate);
+  const start = new Date(startDate + 'T00:00:00Z');
   const diffMs = endDate.getTime() - start.getTime();
   return Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 }

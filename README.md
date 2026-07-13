@@ -191,12 +191,18 @@ eas build --profile preview --platform ios
 # 生成原生项目
 npx expo prebuild --platform android
 
-# 编译 Release APK
+# 编译 Release APK（通用，包含所有架构，体积较大）
 cd android
 ./gradlew assembleRelease
+
+# 按架构构建（推荐，体积更小）
+./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a      # 仅 64 位（现代设备）
+./gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a   # 仅 32 位（老设备）
+./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a  # 双架构
 ```
 
 > 需要设置 `JAVA_HOME` 指向 JDK 17+，并配置 `ANDROID_HOME` 指向 Android SDK。
+> 指定单架构可将 APK 从 ~150 MB 降至 ~65 MB。
 
 ---
 

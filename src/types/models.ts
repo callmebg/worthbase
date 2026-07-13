@@ -70,6 +70,8 @@ export interface RecurringExpense {
   effectiveFrom: string;
   /** Date until which this expense is effective (YYYY-MM), null = ongoing */
   effectiveTo: string | null;
+  /** Reason the expense was ended: manual, retired, sold, or null if ongoing */
+  endedReason: 'manual' | 'retired' | 'sold' | null;
   createdAt: string; // ISO 8601
 }
 

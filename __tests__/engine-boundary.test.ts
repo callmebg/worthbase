@@ -252,3 +252,19 @@ describe('Cross-year date calculations', () => {
     expect(remaining).toBeGreaterThanOrEqual(2000);
   });
 });
+
+// ─── UTC date handling tests ───
+describe('UTC date handling', () => {
+  test('monthsBetween handles UTC correctly regardless of local timezone', () => {
+    // Jan 31 to Feb 28: end day (28) < start day (31), so no extra month
+    // Result should be 1 (just Feb counted, Jan is the start month)
+    const result = monthsBetween('2025-01-31', new Date('2025-02-28T00:00:00Z'));
+    expect(result).toBe(1);
+  });
+
+  test('daysBetween calculates correctly in UTC', () => {
+    // Jan 1 to Jan 31 = 30 days in UTC
+    const result = daysBetween('2025-01-01', new Date('2025-01-31T00:00:00Z'));
+    expect(result).toBe(30);
+  });
+});

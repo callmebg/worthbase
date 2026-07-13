@@ -16,10 +16,11 @@ interface AccountStore {
   isLoading: boolean;
 
   loadAccounts: () => Promise<void>;
-  addAccount: (name: string, type: AccountType, icon?: string | null) => Promise<Account>;
+  addAccount: (name: string, type: AccountType, icon?: string | null, initialBalance?: number) => Promise<Account>;
   editAccount: (id: string, updates: Partial<Pick<Account, 'name' | 'type' | 'icon'>>) => Promise<void>;
   updateBalance: (accountId: string, balance: number, date?: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
+  hardDelete: (id: string) => Promise<void>;
   getTotalBalance: () => number;
 }
 
@@ -35,7 +36,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
     set({ accounts, balances, isLoading: false });
   },
 
-  addAccount: async (name, type, icon = null) => {
+  addAccount: async (name, type, icon = null, initialBalance?: number) => {
     const maxOrder = Math.max(0, ...get().accounts.map(a => a.sortOrder));
     const account = await AccountRepository.create({
       name,
@@ -43,9 +44,24 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       icon,
       sortOrder: maxOrder + 1,
     });
-    set(state => ({
-      accounts: [...state.accounts, account],
-    }));
+
+    if (initialBalance !== undefined && initialBalance > 0) {
+      const today = new Date().toISOString().substring(0, 10);
+      await BalanceSnapshotRepository.create({
+        accountId: account.id,
+        balance: initialBalance,
+        snapshotDate: today,
+      });
+      set(state => {
+        const newBalances = new Map(state.balances);
+        newBalances.set(account.id, initialBalance);
+        return { accounts: [...state.accounts, account], balances: newBalances };
+      });
+    } else {
+      set(state => ({
+        accounts: [...state.accounts, account],
+      }));
+    }
     return account;
   },
 
@@ -80,6 +96,18 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
         balances: newBalances,
       };
     });
+  },
+
+  hardDelete: async (id) => {
+    await AccountRepository.hardDelete(id);
+    set(state => ({
+      accounts: state.accounts.filter(a => a.id !== id),
+      balances: (() => {
+        const newBalances = new Map(state.balances);
+        newBalances.delete(id);
+        return newBalances;
+      })(),
+    }));
   },
 
   getTotalBalance: () => {

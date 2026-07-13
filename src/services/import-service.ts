@@ -13,6 +13,7 @@ import { MaintenanceRepository } from '@/db/maintenance-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { getDatabase } from '@/db/client';
+import { AccountType, AssetCategory, AmortizationType, AssetStatus } from '@/types/enums';
 
 interface ImportData {
   version?: number;
@@ -74,6 +75,9 @@ export const ImportService = {
       // Import accounts — track old→new ID mapping
       if (data.accounts) {
         for (const a of data.accounts) {
+          if (!Object.values(AccountType).includes(a.type)) {
+            throw new Error(`Invalid account type: ${a.type}`);
+          }
           const created = await AccountRepository.create({
             name: a.name, type: a.type, icon: a.icon ?? null, sortOrder: a.sortOrder ?? 0,
           });
@@ -84,6 +88,12 @@ export const ImportService = {
       // Import assets — track old→new ID mapping
       if (data.assets) {
         for (const a of data.assets) {
+          if (!Object.values(AssetCategory).includes(a.category)) {
+            throw new Error(`Invalid asset category: ${a.category}`);
+          }
+          if (!Object.values(AmortizationType).includes(a.amortizationType)) {
+            throw new Error(`Invalid amortization type: ${a.amortizationType}`);
+          }
           const created = await AssetRepository.create({
             name: a.name, category: a.category, purchaseDate: a.purchaseDate,
             purchasePrice: a.purchasePrice, amortizationType: a.amortizationType,

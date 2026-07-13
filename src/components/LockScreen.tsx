@@ -49,7 +49,7 @@ export function LockScreen({ onUnlocked, themeColor }: LockScreenProps) {
     if (biometricEnabled) {
       tryBiometric();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [biometricEnabled]);
 
   const shake = useCallback(() => {
     shakeX.value = withSequence(

@@ -96,6 +96,12 @@ export const AccountRepository = {
     );
   },
 
+  /** Hard delete: physically remove account and its cascade data */
+  async hardDelete(id: string): Promise<void> {
+    const db = getDatabase();
+    await db.runAsync('DELETE FROM accounts WHERE id = ?;', id);
+  },
+
   /**
    * Get the latest balance for an account (from the most recent snapshot).
    */

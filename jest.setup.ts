@@ -320,24 +320,6 @@ jest.mock('react-native-gesture-handler', () => {
   };
 });
 
-// ─── Mock @shopify/react-native-skia ───
-jest.mock('@shopify/react-native-skia', () => {
-  const React = jest.requireActual('react');
-  const makeMock = (name: string) => (props: any) => React.createElement(name, props, props?.children);
-  return {
-    Canvas: makeMock('SkiaCanvas'),
-    Path: makeMock('SkiaPath'),
-    Group: makeMock('SkiaGroup'),
-    Line: makeMock('SkiaLine'),
-    LinearGradient: makeMock('SkiaLinearGradient'),
-    Rect: makeMock('SkiaRect'),
-    Fill: makeMock('SkiaFill'),
-    Circle: makeMock('SkiaCircle'),
-    Text: makeMock('SkiaText'),
-    vec: (x: number, y: number) => ({ x, y }),
-    Skia: { Path: { Make: () => ({ moveTo: jest.fn(), lineTo: jest.fn(), close: jest.fn(), copy: jest.fn() }) } },
-  };
-});
 
 // ─── Mock @gorhom/bottom-sheet ───
 jest.mock('@gorhom/bottom-sheet', () => {

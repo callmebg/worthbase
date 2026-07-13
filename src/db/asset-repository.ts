@@ -141,16 +141,18 @@ export const AssetRepository = {
   async markRetired(id: string): Promise<void> {
     const db = getDatabase();
     const now = new Date().toISOString();
-    await db.runAsync(
-      `UPDATE assets SET status = 'retired', updated_at = ? WHERE id = ?;`,
-      now, id
-    );
-    // End all active recurring expenses
-    const currentMonth = new Date().toISOString().substring(0, 7);
-    await db.runAsync(
-      `UPDATE recurring_expenses SET effective_to = ? WHERE asset_id = ? AND effective_to IS NULL;`,
-      currentMonth, id
-    );
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `UPDATE assets SET status = 'retired', updated_at = ? WHERE id = ?;`,
+        now, id
+      );
+      // End all active recurring expenses
+      const currentMonth = now.substring(0, 7);
+      await db.runAsync(
+        `UPDATE recurring_expenses SET effective_to = ?, ended_reason = 'retired' WHERE asset_id = ? AND effective_to IS NULL;`,
+        currentMonth, id
+      );
+    });
   },
 
   /**
@@ -184,7 +186,7 @@ export const AssetRepository = {
     );
     // Re-open recurring expenses that were ended on retirement
     await db.runAsync(
-      `UPDATE recurring_expenses SET effective_to = NULL WHERE asset_id = ? AND effective_to IS NOT NULL;`,
+      `UPDATE recurring_expenses SET effective_to = NULL, ended_reason = NULL WHERE asset_id = ? AND effective_to IS NOT NULL AND ended_reason = 'retired';`,
       id
     );
   },

@@ -17,6 +17,8 @@ import { NoAmortizationStrategy } from '@/engine/strategies/NoAmortizationStrate
 import { getStrategy, getStrategyByType } from '@/engine/strategies';
 import { AmortizationType, AssetStatus, AssetCategory } from '@/types/enums';
 import type { Asset } from '@/types/models';
+import { ProjectionCalculator } from '@/engine/ProjectionCalculator';
+import { NetWorthCalculator } from '@/engine/NetWorthCalculator';
 
 // ─── Helper: create a test asset ───
 function makeAsset(overrides: Partial<Asset> = {}): Asset {
@@ -315,8 +317,111 @@ describe('Maintenance amortization logic', () => {
     const maintenanceDate = '2025-06-15';
     const expectedLifespanMonths = 36;
     const monthsBeforeMaintenance = monthsBetween(purchaseDate, new Date(maintenanceDate));
-    const remainingMonths = Math.max(1, expectedLifespanMonths - monthsBeforeMaintenance + 1);
-    // monthsBeforeMaintenance = 6, remaining = 36 - 6 + 1 = 31
-    expect(remainingMonths).toBe(31);
+    const remainingMonths = Math.max(1, expectedLifespanMonths - monthsBeforeMaintenance);
+    // monthsBeforeMaintenance = 6, remaining = 36 - 6 = 30
+    expect(remainingMonths).toBe(30);
+  });
+});
+
+// ─── ProjectionCalculator tests ───
+describe('ProjectionCalculator', () => {
+  describe('estimateAchievementDate', () => {
+    test('returns null with less than 2 data points', () => {
+      // 0 data points
+      expect(ProjectionCalculator.estimateAchievementDate([], 100000)).toBeNull();
+      // 1 data point
+      expect(
+        ProjectionCalculator.estimateAchievementDate(
+          [{ date: '2025-01-01', value: 50000 }],
+          100000
+        )
+      ).toBeNull();
+    });
+
+    test('returns null when slope is zero or negative', () => {
+      // Flat growth (slope = 0)
+      const flatPoints = [
+        { date: '2025-01-01', value: 50000 },
+        { date: '2025-02-01', value: 50000 },
+        { date: '2025-03-01', value: 50000 },
+      ];
+      expect(ProjectionCalculator.estimateAchievementDate(flatPoints, 100000)).toBeNull();
+
+      // Declining net worth (slope < 0)
+      const decliningPoints = [
+        { date: '2025-01-01', value: 60000 },
+        { date: '2025-02-01', value: 55000 },
+        { date: '2025-03-01', value: 50000 },
+      ];
+      expect(ProjectionCalculator.estimateAchievementDate(decliningPoints, 100000)).toBeNull();
+    });
+
+    test('returns null when goal is already achieved', () => {
+      const points = [
+        { date: '2025-01-01', value: 100000 },
+        { date: '2025-02-01', value: 110000 },
+      ];
+      // currentValue (110000) >= goal (100000)
+      expect(ProjectionCalculator.estimateAchievementDate(points, 100000)).toBeNull();
+      // currentValue equals goal exactly
+      const exactPoints = [
+        { date: '2025-01-01', value: 90000 },
+        { date: '2025-02-01', value: 100000 },
+      ];
+      expect(ProjectionCalculator.estimateAchievementDate(exactPoints, 100000)).toBeNull();
+    });
+
+    test('estimates correct date with linear growth', () => {
+      // Monthly growth of ~10000: from 50000 to 100000 over 6 months
+      const points = [
+        { date: '2025-01-01', value: 50000 },
+        { date: '2025-02-01', value: 60000 },
+        { date: '2025-03-01', value: 70000 },
+        { date: '2025-04-01', value: 80000 },
+        { date: '2025-05-01', value: 90000 },
+        { date: '2025-06-01', value: 100000 },
+      ];
+      const result = ProjectionCalculator.estimateAchievementDate(points, 150000);
+      expect(result).not.toBeNull();
+      // Goal is 150000, current is 100000, need ~50000 more at ~10000/month ≈ 5 months
+      // 5 months after June 2025 → approximately October–November 2025
+      expect(result).toMatch(/^2025-(10|11)-/);
+    });
+
+    test('uses only last 6 points when more are provided', () => {
+      // 10 points: first 4 are flat, last 6 have linear growth
+      const points = [
+        { date: '2024-09-01', value: 50000 },
+        { date: '2024-10-01', value: 50000 },
+        { date: '2024-11-01', value: 50000 },
+        { date: '2024-12-01', value: 50000 },
+        { date: '2025-01-01', value: 50000 },
+        { date: '2025-02-01', value: 60000 },
+        { date: '2025-03-01', value: 70000 },
+        { date: '2025-04-01', value: 80000 },
+        { date: '2025-05-01', value: 90000 },
+        { date: '2025-06-01', value: 100000 },
+      ];
+      const result = ProjectionCalculator.estimateAchievementDate(points, 150000);
+      expect(result).not.toBeNull();
+
+      // Result should be identical to using only the last 6 points
+      const resultLast6 = ProjectionCalculator.estimateAchievementDate(points.slice(-6), 150000);
+      expect(result).toBe(resultLast6);
+    });
+  });
+});
+
+// ─── NetWorthCalculator negative progress tests ───
+describe('NetWorthCalculator - negative progress', () => {
+  test('returns negative percentage when net worth is negative', () => {
+    const result = NetWorthCalculator.calculateProgress(-10000, 100000);
+    expect(result.percentage).toBe(-10);
+    expect(result.isOnTrack).toBe(false);
+  });
+
+  test('returns 0 when goal is null or <= 0', () => {
+    expect(NetWorthCalculator.calculateProgress(-5000, null).percentage).toBe(0);
+    expect(NetWorthCalculator.calculateProgress(-5000, 0).percentage).toBe(0);
   });
 });

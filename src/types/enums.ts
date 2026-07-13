@@ -45,6 +45,7 @@ export enum AssetCategory {
   FURNITURE = 'furniture',
   APPLIANCE = 'appliance',
   LUXURY = 'luxury',
+  PRECIOUS_METAL = 'precious_metal',
   OTHER = 'other',
 }
 
@@ -57,6 +58,7 @@ export const AssetCategoryLabels: Record<AssetCategory, string> = {
   [AssetCategory.FURNITURE]: '家具',
   [AssetCategory.APPLIANCE]: '家电',
   [AssetCategory.LUXURY]: '奢侈品',
+  [AssetCategory.PRECIOUS_METAL]: '贵金属',
   [AssetCategory.OTHER]: '其他',
 };
 
@@ -72,6 +74,7 @@ export const AssetCategoryIcons: Record<AssetCategory, string> = {
   [AssetCategory.FURNITURE]: '🪑',
   [AssetCategory.APPLIANCE]: '🔌',
   [AssetCategory.LUXURY]: '⌚',
+  [AssetCategory.PRECIOUS_METAL]: '💎',
   [AssetCategory.OTHER]: '📦',
 };
 

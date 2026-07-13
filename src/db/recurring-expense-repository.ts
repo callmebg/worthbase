@@ -13,6 +13,7 @@ interface RecurringExpenseRow {
   amount: number;
   effective_from: string;
   effective_to: string | null;
+  ended_reason: string | null;
   created_at: string;
 }
 
@@ -24,6 +25,7 @@ function rowToRecurringExpense(row: RecurringExpenseRow): RecurringExpense {
     amount: row.amount,
     effectiveFrom: row.effective_from,
     effectiveTo: row.effective_to,
+    endedReason: row.ended_reason as RecurringExpense['endedReason'],
     createdAt: row.created_at,
   };
 }
@@ -77,16 +79,16 @@ export const RecurringExpenseRepository = {
     return rows.map(rowToRecurringExpense);
   },
 
-  async create(expense: Omit<RecurringExpense, 'id' | 'createdAt'>): Promise<RecurringExpense> {
+  async create(expense: Omit<RecurringExpense, 'id' | 'createdAt' | 'endedReason'>): Promise<RecurringExpense> {
     const db = getDatabase();
     const now = new Date().toISOString();
     const id = generateId();
     await db.runAsync(
-      `INSERT INTO recurring_expenses (id, asset_id, name, amount, effective_from, effective_to, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?);`,
-      id, expense.assetId, expense.name, expense.amount, expense.effectiveFrom, expense.effectiveTo, now
+      `INSERT INTO recurring_expenses (id, asset_id, name, amount, effective_from, effective_to, ended_reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+      id, expense.assetId, expense.name, expense.amount, expense.effectiveFrom, expense.effectiveTo, null, now
     );
-    return { ...expense, id, createdAt: now };
+    return { ...expense, id, endedReason: null, createdAt: now };
   },
 
   async update(id: string, updates: Partial<RecurringExpense>): Promise<void> {
@@ -98,6 +100,7 @@ export const RecurringExpenseRepository = {
     if (updates.amount !== undefined) { fields.push('amount = ?'); values.push(updates.amount); }
     if (updates.effectiveFrom !== undefined) { fields.push('effective_from = ?'); values.push(updates.effectiveFrom); }
     if (updates.effectiveTo !== undefined) { fields.push('effective_to = ?'); values.push(updates.effectiveTo); }
+    if (updates.endedReason !== undefined) { fields.push('ended_reason = ?'); values.push(updates.endedReason); }
 
     if (fields.length === 0) return;
     values.push(id);
@@ -121,6 +124,17 @@ export const RecurringExpenseRepository = {
     await db.runAsync(
       `UPDATE recurring_expenses SET effective_to = ? WHERE id = ?;`,
       effectiveTo, id
+    );
+  },
+
+  /**
+   * End a recurring expense with a reason.
+   */
+  async endExpenseWithReason(id: string, effectiveTo: string, reason: 'manual' | 'retired' | 'sold'): Promise<void> {
+    const db = getDatabase();
+    await db.runAsync(
+      `UPDATE recurring_expenses SET effective_to = ?, ended_reason = ? WHERE id = ?;`,
+      effectiveTo, reason, id
     );
   },
 };

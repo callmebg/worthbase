@@ -6,7 +6,7 @@
  * Redesigned with design system and shared components.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Alert, Switch, TouchableOpacity,
 } from 'react-native';
@@ -29,9 +29,20 @@ import { AppChip } from '@/components/ui/Chip';
 import { AppButton } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { radius } from '@/theme/tokens';
+import { recommendAmortization } from '@/engine/AmortizationRecommender';
 
 type DraftRecurring = Omit<RecurringExpense, 'id' | 'createdAt' | 'assetId'>;
 type DraftMaintenance = Omit<MaintenanceRecord, 'id' | 'createdAt' | 'assetId'>;
+
+/** Preset lifespan options for quick selection */
+const LIFESPAN_PRESETS = [
+  { label: '3年', months: 36 },
+  { label: '5年', months: 60 },
+  { label: '10年', months: 120 },
+];
+
+/** Maximum allowed lifespan in months (100 years) */
+const MAX_LIFESPAN_MONTHS = 1200;
 
 export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   visible: boolean;
@@ -66,6 +77,55 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const [maintenanceDate, setMaintenanceDate] = useState(getCurrentDate());
   const [maintenanceAmortize, setMaintenanceAmortize] = useState(true);
 
+  // Recommendation tracking — whether user has manually overridden the auto-recommendation
+  const [userModifiedAmortizationType, setUserModifiedAmortizationType] = useState(false);
+  const [userModifiedLifespan, setUserModifiedLifespan] = useState(false);
+  const [lifespanMode, setLifespanMode] = useState<'preset' | 'custom'>('preset');
+  const [lifespanYears, setLifespanYears] = useState('');
+
+  const recommendation = useMemo(
+    () => recommendAmortization(category),
+    [category]
+  );
+
+  // Apply recommendation when entering Step 2 (only for new assets, not editing)
+  useEffect(() => {
+    if (step === 2 && !editAsset) {
+      if (!userModifiedAmortizationType) {
+        setAmortizationType(recommendation.type);
+      }
+      if (!userModifiedLifespan) {
+        if (recommendation.defaultLifespanMonths) {
+          const monthsStr = String(recommendation.defaultLifespanMonths);
+          setExpectedLifespan(monthsStr);
+          const matchedPreset = LIFESPAN_PRESETS.find(p => p.months === recommendation.defaultLifespanMonths);
+          if (matchedPreset) {
+            setLifespanMode('preset');
+            setLifespanYears('');
+          } else {
+            setLifespanMode('custom');
+            const yrs = recommendation.defaultLifespanMonths / 12;
+            setLifespanYears(yrs % 1 === 0 ? String(yrs) : yrs.toFixed(1));
+          }
+        } else {
+          setExpectedLifespan('');
+          setLifespanMode('preset');
+          setLifespanYears('');
+        }
+      }
+    }
+  }, [step, editAsset, userModifiedAmortizationType, userModifiedLifespan, recommendation]);
+
+  const handleCategoryChange = (cat: AssetCategory) => {
+    setCategory(cat);
+    if (!editAsset) {
+      setUserModifiedAmortizationType(false);
+      setUserModifiedLifespan(false);
+      setLifespanMode('preset');
+      setLifespanYears('');
+    }
+  };
+
   const resetForm = () => {
     setStep(1); setName(''); setCategory(AssetCategory.ELECTRONICS);
     setPurchaseDate(getCurrentDate()); setPurchasePrice('');
@@ -76,10 +136,12 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
     setRecurringName(''); setRecurringAmount('');
     setMaintenanceName(''); setMaintenanceAmount('');
     setMaintenanceDate(getCurrentDate()); setMaintenanceAmortize(true);
+    setUserModifiedAmortizationType(false); setUserModifiedLifespan(false);
+    setLifespanMode('preset'); setLifespanYears('');
   };
 
   // Prefill when editing
-  useState(() => {
+  useEffect(() => {
     if (editAsset) {
       setStep(1);
       setName(editAsset.name);
@@ -87,18 +149,36 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       setPurchaseDate(editAsset.purchaseDate);
       setPurchasePrice(String(editAsset.purchasePrice));
       setAmortizationType(editAsset.amortizationType);
-      setExpectedLifespan(editAsset.expectedLifespanMonths ? String(editAsset.expectedLifespanMonths) : '');
+      const lifespanStr = editAsset.expectedLifespanMonths ? String(editAsset.expectedLifespanMonths) : '';
+      setExpectedLifespan(lifespanStr);
+      if (lifespanStr) {
+        const months = parseInt(lifespanStr);
+        const matchedPreset = LIFESPAN_PRESETS.find(p => p.months === months);
+        if (matchedPreset) {
+          setLifespanMode('preset');
+          setLifespanYears('');
+        } else {
+          setLifespanMode('custom');
+          const yrs = months / 12;
+          setLifespanYears(yrs % 1 === 0 ? String(yrs) : yrs.toFixed(1));
+        }
+      } else {
+        setLifespanMode('preset');
+        setLifespanYears('');
+      }
       setResidualValue(editAsset.residualValue ? String(editAsset.residualValue) : '');
       setValuationTracking(editAsset.valuationTracking);
       setCurrentValuation(editAsset.currentValuation ? String(editAsset.currentValuation) : '');
     }
-  });
+  }, [editAsset, visible]);
 
   const priceValid = !purchasePrice.trim() || isValidPositiveNumber(purchasePrice);
   const dateValid = isValidDate(purchaseDate);
   const canProceedStep1 = name.trim() && purchasePrice.trim() && isValidPositiveNumber(purchasePrice) && dateValid;
-  const canProceedStep2 = (amortizationType !== AmortizationType.EXPECTED_LIFESPAN || (expectedLifespan.trim() && parseInt(expectedLifespan) > 0))
-    && (amortizationType !== AmortizationType.RESIDUAL_VALUE || (expectedLifespan.trim() && parseInt(expectedLifespan) > 0 && residualValue.trim() && isValidPositiveNumber(residualValue)));
+  const lifespanValid = !!(expectedLifespan.trim() && parseInt(expectedLifespan) > 0 && parseInt(expectedLifespan) <= MAX_LIFESPAN_MONTHS);
+  const canProceedStep2 = (amortizationType !== AmortizationType.EXPECTED_LIFESPAN || lifespanValid)
+    && (amortizationType !== AmortizationType.RESIDUAL_VALUE || (lifespanValid && residualValue.trim() && isValidPositiveNumber(residualValue)));
+  const lifespanYearsError = lifespanYears.trim() && parseFloat(lifespanYears) > 100 ? '不能超过100年（1200个月）' : undefined;
 
   const handleAddRecurring = () => {
     if (!recurringName.trim()) { Alert.alert('提示', '请输入支出名称'); return; }
@@ -210,7 +290,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
                   key={cat}
                   label={AssetCategoryLabels[cat]}
                   selected={category === cat}
-                  onPress={() => setCategory(cat)}
+                  onPress={() => handleCategoryChange(cat)}
                   icon={ASSET_CATEGORY_ICONS[cat]}
                 />
               ))}
@@ -235,6 +315,9 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         {step === 2 && (
           <>
             <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>分摊方式</Text>
+            {recommendation.hint ? (
+              <Text style={[styles.hintText, { color: theme.colors.tertiary }]}>{recommendation.hint}</Text>
+            ) : null}
             {amortTypes.map(at => (
               <TouchableOpacity
                 key={at}
@@ -243,7 +326,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
                   { borderBottomColor: theme.colors.outline },
                   amortizationType === at && { backgroundColor: theme.colors.primaryContainer + '30' },
                 ]}
-                onPress={() => setAmortizationType(at)}
+                onPress={() => { setUserModifiedAmortizationType(true); setAmortizationType(at); }}
               >
                 <View
                   style={[
@@ -254,21 +337,78 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
                   {amortizationType === at && <View style={[styles.radioDot, { backgroundColor: theme.colors.primary }]} />}
                 </View>
                 <View style={{ flex: 1, paddingVertical: 12 }}>
-                  <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>{AmortizationTypeLabels[at]}</Text>
+                  <View style={styles.radioLabelRow}>
+                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>{AmortizationTypeLabels[at]}</Text>
+                    {at === recommendation.type ? (
+                      <View style={[styles.recommendBadge, { backgroundColor: theme.colors.primaryContainer }]}>
+                        <Text style={[styles.recommendBadgeText, { color: theme.colors.onPrimaryContainer }]}>推荐</Text>
+                      </View>
+                    ) : null}
+                  </View>
                   <Text style={[styles.radioDesc, { color: theme.colors.tertiary }]}>{AmortizationTypeDescriptions[at]}</Text>
                 </View>
               </TouchableOpacity>
             ))}
 
             {(amortizationType === AmortizationType.EXPECTED_LIFESPAN || amortizationType === AmortizationType.RESIDUAL_VALUE) && (
-              <AppTextInput bottomSheet
-                label="预期使用月数"
-                value={expectedLifespan}
-                onChangeText={setExpectedLifespan}
-                placeholder="如：36"
-                keyboardType="decimal-pad"
-                error={expectedLifespan.trim() && !isValidPositiveNumber(expectedLifespan) ? '月数必须大于 0' : undefined}
-              />
+              <View>
+                <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>预期使用年限</Text>
+                <View style={styles.grid}>
+                  {LIFESPAN_PRESETS.map(preset => (
+                    <AppChip
+                      key={preset.label}
+                      label={preset.label}
+                      selected={lifespanMode === 'preset' && expectedLifespan === String(preset.months)}
+                      onPress={() => {
+                        setUserModifiedLifespan(true);
+                        setLifespanMode('preset');
+                        setExpectedLifespan(String(preset.months));
+                        setLifespanYears('');
+                      }}
+                    />
+                  ))}
+                  <AppChip
+                    label="自定义"
+                    selected={lifespanMode === 'custom'}
+                    onPress={() => {
+                      setUserModifiedLifespan(true);
+                      setLifespanMode('custom');
+                      if (expectedLifespan && parseInt(expectedLifespan) > 0) {
+                        const months = parseInt(expectedLifespan);
+                        const yrs = months / 12;
+                        setLifespanYears(yrs % 1 === 0 ? String(yrs) : yrs.toFixed(1));
+                      }
+                    }}
+                  />
+                </View>
+                {lifespanMode === 'custom' ? (
+                  <View>
+                    <AppTextInput bottomSheet
+                      label="预期使用年数"
+                      value={lifespanYears}
+                      onChangeText={(text) => {
+                        setUserModifiedLifespan(true);
+                        setLifespanYears(text);
+                        const years = parseFloat(text);
+                        if (!isNaN(years) && years > 0) {
+                          const months = Math.round(years * 12);
+                          setExpectedLifespan(String(months));
+                        } else if (text.trim() === '') {
+                          setExpectedLifespan('');
+                        }
+                      }}
+                      placeholder="如：30"
+                      keyboardType="decimal-pad"
+                      error={lifespanYearsError}
+                    />
+                    {lifespanYears.trim() && !isNaN(parseFloat(lifespanYears)) && parseFloat(lifespanYears) > 0 && parseFloat(lifespanYears) <= 100 ? (
+                      <Text style={[styles.hintText, { color: theme.colors.tertiary }]}>
+                        = {Math.round(parseFloat(lifespanYears) * 12)} 个月
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
             )}
 
             {amortizationType === AmortizationType.RESIDUAL_VALUE && (
@@ -378,11 +518,15 @@ const styles = StyleSheet.create({
   stepBar: { flexDirection: 'row', gap: 4, marginBottom: 16 },
   stepDot: { flex: 1, height: 3, borderRadius: 2 },
   label: { fontSize: 14, fontWeight: '500', marginBottom: 8, marginTop: 12 },
+  hintText: { fontSize: 12, marginBottom: 8, marginTop: -4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
   radioRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: 5 },
   radioLabel: { fontSize: 15, fontWeight: '500' },
+  radioLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recommendBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  recommendBadgeText: { fontSize: 10, fontWeight: '600' },
   radioDesc: { fontSize: 12, marginTop: 2 },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
   switchLabel: { fontSize: 15 },

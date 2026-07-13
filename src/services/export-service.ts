@@ -28,11 +28,13 @@ export const ExportService = {
       BalanceSnapshotRepository.getAllSnapshotDates(),
     ]);
 
-    // Get all balance snapshots
+    // Get all balance snapshots, excluding deleted accounts
+    const activeAccountIds = new Set((await AccountRepository.getAll()).map(a => a.id));
     const snapshots: { accountId: string; balance: number; snapshotDate: string }[] = [];
     for (const date of snapshotDates) {
       const balMap = await BalanceSnapshotRepository.getBalancesForDate(date);
       for (const [accountId, balance] of balMap) {
+        if (!activeAccountIds.has(accountId)) continue;
         snapshots.push({ accountId, balance, snapshotDate: date });
       }
     }
@@ -111,7 +113,7 @@ export const ExportService = {
     }
 
     const csv = [...rows, [], ['资产列表'], ...assetRows]
-      .map(r => r.map(c => `"${c}"`).join(','))
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
     const fileName = `worthbase_export_${getCurrentDate()}.csv`;

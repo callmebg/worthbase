@@ -6,7 +6,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 interface Migration {
   version: number;
@@ -30,8 +30,32 @@ const migrations: Migration[] = [
     version: 2,
     description: 'Add deleted_at column to accounts for soft delete',
     up: async (db: SQLiteDatabase) => {
+      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(accounts);');
+      const hasDeletedAt = columns.some((column) => column.name === 'deleted_at');
+
+      if (!hasDeletedAt) {
+        await db.execAsync(`
+          ALTER TABLE accounts ADD COLUMN deleted_at TEXT;
+        `);
+      }
+    },
+  },
+  // Version 3: Add ended_reason to recurring_expenses and index on accounts.deleted_at
+  {
+    version: 3,
+    description: 'Add ended_reason column and deleted_at index',
+    up: async (db: SQLiteDatabase) => {
+      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(recurring_expenses);');
+      const hasEndedReason = columns.some((column) => column.name === 'ended_reason');
+
+      if (!hasEndedReason) {
+        await db.execAsync(`
+          ALTER TABLE recurring_expenses ADD COLUMN ended_reason TEXT;
+        `);
+      }
+
       await db.execAsync(`
-        ALTER TABLE accounts ADD COLUMN deleted_at TEXT;
+        CREATE INDEX IF NOT EXISTS idx_accounts_deleted_at ON accounts(deleted_at);
       `);
     },
   },

@@ -15,7 +15,9 @@ import {
   Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { useTheme } from 'react-native-paper';
+import { useAppTheme } from '@/utils/format';
+import { THEME_COLOR_MAP } from '@/theme/colors';
+import { spacing } from '@/theme/tokens';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useAccountStore } from '@/stores/account-store';
 import { useAssetStore } from '@/stores/asset-store';
@@ -30,13 +32,14 @@ import { AppButton } from '@/components/ui/Button';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { Icon } from '@/components/ui/Icon';
+import { useToast } from '@/hooks/useToast';
 
-const THEME_COLORS = [
-  { key: 'purple', color: '#6C5CE7', label: '紫色' },
-  { key: 'blue', color: '#0984E3', label: '蓝色' },
-  { key: 'green', color: '#00B894', label: '绿色' },
-  { key: 'orange', color: '#E17055', label: '橙色' },
-];
+const THEME_COLOR_LABELS: Record<string, string> = { purple: '紫色', blue: '蓝色', green: '绿色', orange: '橙色' };
+const THEME_COLORS = Object.entries(THEME_COLOR_MAP).map(([hex, key]) => ({
+  key,
+  color: hex,
+  label: THEME_COLOR_LABELS[key] ?? key,
+}));
 
 const CURRENCY_OPTIONS = ['¥', '$', '€', '£', '₩'];
 
@@ -47,14 +50,14 @@ const DARK_MODE_OPTIONS = [
 ];
 
 export default function SettingsScreen() {
-  const theme = useTheme();
+  const theme = useAppTheme();
+  const toast = useToast();
   const settings = useSettingsStore();
   const { accounts, balances } = useAccountStore();
   const { assets } = useAssetStore();
 
   const [pinInput, setPinInput] = useState('');
   const [showPinSetup, setShowPinSetup] = useState(false);
-  const [goalInput, setGoalInput] = useState('');
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState('生物识别');
   const [backupList, setBackupList] = useState<string[]>([]);
@@ -86,7 +89,7 @@ export default function SettingsScreen() {
     await settings.update({ appLockEnabled: true, pinHash: 'secure-store' });
     setPinInput('');
     setShowPinSetup(false);
-    Alert.alert('已启用', '应用锁已开启，每次启动需要 PIN 码解锁');
+    toast.show('应用锁已开启', 'success');
   };
 
   const handleToggleBiometric = async (enabled: boolean) => {
@@ -109,7 +112,7 @@ export default function SettingsScreen() {
     setExporting(true);
     try {
       await ExportService.exportJSON();
-      Alert.alert('导出成功', 'JSON 数据已导出');
+      toast.show('JSON 数据已导出', 'success');
     } catch (err) {
       Alert.alert('导出失败', (err as Error).message);
     } finally {
@@ -121,7 +124,7 @@ export default function SettingsScreen() {
     setExporting(true);
     try {
       await ExportService.exportCSV();
-      Alert.alert('导出成功', 'CSV 数据已导出');
+      toast.show('CSV 数据已导出', 'success');
     } catch (err) {
       Alert.alert('导出失败', (err as Error).message);
     } finally {
@@ -154,7 +157,7 @@ export default function SettingsScreen() {
                 await useAccountStore.getState().loadAccounts();
                 await useAssetStore.getState().loadAssets();
                 await settings.loadSettings();
-                Alert.alert('导入成功', '数据已恢复');
+                toast.show('数据已恢复', 'success');
               } catch (err) {
                 Alert.alert('导入失败', (err as Error).message);
               } finally {
@@ -191,7 +194,7 @@ export default function SettingsScreen() {
               await useAssetStore.getState().loadAssets();
               await settings.loadSettings();
               setShowBackups(false);
-              Alert.alert('恢复成功', '已从备份恢复数据');
+              toast.show('已从备份恢复', 'success');
             } catch (err) {
               Alert.alert('恢复失败', (err as Error).message);
             }
@@ -199,13 +202,6 @@ export default function SettingsScreen() {
         },
       ],
     );
-  };
-
-  const handleSetGoal = async () => {
-    const goal = parseFloat(goalInput) || null;
-    await settings.update({ netWorthGoal: goal });
-    setGoalInput('');
-    Alert.alert('已保存', '净资产目标已更新');
   };
 
   return (
@@ -259,7 +255,7 @@ export default function SettingsScreen() {
               onPress={() => settings.update({ themeColor: tc.color })}
             >
               {settings.themeColor === tc.color && (
-                <Icon name="Check" size={18} color="#fff" />
+                <Icon name="Check" size={18} color={theme.colors.onPrimary} />
               )}
             </TouchableOpacity>
           ))}
@@ -291,39 +287,21 @@ export default function SettingsScreen() {
         </View>
       </AppCard>
 
-      {/* ── Net Worth Goal Section ── */}
+      {/* ── Net Worth Goal Section (read-only, edit in Dashboard) ── */}
       <AppCard style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>净资产目标</Text>
-        <Text style={[styles.subtext, { color: theme.colors.onSurfaceVariant }]}>
-          设定目标后在总览面板显示进度
-        </Text>
         {settings.netWorthGoal ? (
-          <View style={styles.goalRow}>
-            <Text style={[styles.goalValue, { color: theme.colors.primary }]}>
-              {settings.currencySymbol}{settings.netWorthGoal.toLocaleString('zh-CN')}
-            </Text>
-            <AppButton
-              title="清除"
-              variant="text"
-              onPress={() => settings.update({ netWorthGoal: null })}
-            />
-          </View>
-        ) : null}
-        <View style={styles.goalInputRow}>
-          <AppTextInput
-            label="输入目标金额"
-            value={goalInput}
-            onChangeText={setGoalInput}
-            keyboardType="decimal-pad"
-            style={{ flex: 1 }}
-          />
-          <AppButton
-            title="保存"
-            variant="primary"
-            onPress={handleSetGoal}
-            style={styles.goalBtn}
-          />
-        </View>
+          <Text style={[styles.goalValue, { color: theme.colors.primary }]}>
+            {settings.currencySymbol}{settings.netWorthGoal.toLocaleString('zh-CN')}
+          </Text>
+        ) : (
+          <Text style={[styles.subtext, { color: theme.colors.onSurfaceVariant }]}>
+            未设置
+          </Text>
+        )}
+        <Text style={[styles.subtext, { color: theme.colors.onSurfaceVariant, marginTop: spacing.sm }]}>
+          在总览页面设置和修改净资产目标
+        </Text>
       </AppCard>
 
       {/* ── Data Section ── */}
@@ -434,7 +412,7 @@ export default function SettingsScreen() {
             })}
           </ScrollView>
         )}
-        <AppButton title="关闭" variant="primary" onPress={() => setShowBackups(false)} style={{ marginTop: 16 }} />
+        <AppButton title="关闭" variant="primary" onPress={() => setShowBackups(false)} style={{ marginTop: spacing.md }} />
       </AppBottomSheet>
     </ScrollView>
   );
@@ -442,11 +420,11 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  section: { marginHorizontal: 16, marginTop: 16, marginBottom: 0 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
-  subLabel: { fontSize: 14, marginTop: 12, marginBottom: 8 },
-  subtext: { fontSize: 12, marginBottom: 8 },
-  colorRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
+  section: { marginHorizontal: spacing.md, marginTop: spacing.md, marginBottom: 0 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: spacing.sm + spacing.xs },
+  subLabel: { fontSize: 14, marginTop: spacing.sm + spacing.xs, marginBottom: spacing.sm },
+  subtext: { fontSize: 12, marginBottom: spacing.sm },
+  colorRow: { flexDirection: 'row', gap: spacing.sm + spacing.xs, marginBottom: spacing.sm },
   colorSwatch: {
     width: 40,
     height: 40,
@@ -458,13 +436,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
-  goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
   goalValue: { fontSize: 18, fontWeight: '700' },
-  goalInputRow: { flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'flex-start' },
-  goalBtn: { marginTop: 4 },
-  aboutDesc: { fontSize: 13, marginTop: 8, lineHeight: 20, paddingHorizontal: 8 },
-  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: 16 },
-  sheetActions: { flexDirection: 'row', gap: 12 },
-  emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 16 },
+  aboutDesc: { fontSize: 13, marginTop: spacing.sm, lineHeight: 20, paddingHorizontal: spacing.sm },
+  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: spacing.md },
+  sheetActions: { flexDirection: 'row', gap: spacing.sm + spacing.xs },
+  emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: spacing.md },
 });

@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS recurring_expenses (
   amount REAL NOT NULL,
   effective_from TEXT NOT NULL,
   effective_to TEXT,
+  ended_reason TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );

@@ -79,7 +79,8 @@ export const BalanceSnapshotRepository = {
        INNER JOIN (
          SELECT account_id, MAX(snapshot_date) as max_date
          FROM balance_snapshots WHERE snapshot_date <= ? GROUP BY account_id
-       ) latest ON bs.account_id = latest.account_id AND bs.snapshot_date = latest.max_date;`,
+       ) latest ON bs.account_id = latest.account_id AND bs.snapshot_date = latest.max_date
+       INNER JOIN accounts a ON bs.account_id = a.id AND a.deleted_at IS NULL;`,
       date
     );
     const map = new Map<string, number>();

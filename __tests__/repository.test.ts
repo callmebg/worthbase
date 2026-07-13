@@ -29,6 +29,7 @@ import { AccountRepository } from '@/db/account-repository';
 import { AssetRepository } from '@/db/asset-repository';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
+import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { AccountType, AssetCategory, AmortizationType, AssetStatus } from '@/types/enums';
 import { initMockDatabase, resetMockDatabase } from './helpers/mock-database';
@@ -525,5 +526,147 @@ describe('Settings Repository', () => {
     expect(loaded.pinHash).toBeNull();
     expect(loaded.themeColor).toBe('#6C5CE7');
     expect(loaded.currencySymbol).toBe('¥');
+  });
+});
+
+// ─── Account Repository hardDelete Tests ───
+describe('AccountRepository - hardDelete', () => {
+  test('physically removes account and cascades to snapshots', async () => {
+    const account = await AccountRepository.create({
+      name: 'ToHardDelete', type: AccountType.CASH, icon: null, sortOrder: 1,
+    });
+    await BalanceSnapshotRepository.create({
+      accountId: account.id, balance: 5000, snapshotDate: '2025-01-01',
+    });
+    await BalanceSnapshotRepository.create({
+      accountId: account.id, balance: 6000, snapshotDate: '2025-02-01',
+    });
+
+    // Verify account and snapshots exist
+    expect(await AccountRepository.getById(account.id)).not.toBeNull();
+    const snapshots = await BalanceSnapshotRepository.getByAccount(account.id);
+    expect(snapshots).toHaveLength(2);
+
+    // Hard delete — should physically remove the account
+    await AccountRepository.hardDelete(account.id);
+
+    // Account should be completely gone (not just soft-deleted)
+    expect(await AccountRepository.getById(account.id)).toBeNull();
+
+    // Balance snapshots should be cascade-deleted
+    const snapshotsAfter = await BalanceSnapshotRepository.getByAccount(account.id);
+    expect(snapshotsAfter).toHaveLength(0);
+  });
+
+  test('hardDelete does not affect other accounts', async () => {
+    const acc1 = await AccountRepository.create({
+      name: 'KeepMe', type: AccountType.CASH, icon: null, sortOrder: 1,
+    });
+    const acc2 = await AccountRepository.create({
+      name: 'DeleteMe', type: AccountType.WECHAT, icon: null, sortOrder: 2,
+    });
+    await BalanceSnapshotRepository.create({
+      accountId: acc1.id, balance: 1000, snapshotDate: '2025-01-01',
+    });
+    await BalanceSnapshotRepository.create({
+      accountId: acc2.id, balance: 2000, snapshotDate: '2025-01-01',
+    });
+
+    await AccountRepository.hardDelete(acc2.id);
+
+    // acc1 should still exist with its snapshot
+    expect(await AccountRepository.getById(acc1.id)).not.toBeNull();
+    const acc1Snapshots = await BalanceSnapshotRepository.getByAccount(acc1.id);
+    expect(acc1Snapshots).toHaveLength(1);
+    expect(acc1Snapshots[0].balance).toBe(1000);
+  });
+});
+
+// ─── Asset Repository markRetired with ended_reason Tests ───
+describe('AssetRepository - markRetired with ended_reason', () => {
+  test('sets ended_reason to retired on active recurring expenses', async () => {
+    const asset = await AssetRepository.create({
+      name: 'Test', category: AssetCategory.ELECTRONICS,
+      purchaseDate: '2025-01-01', purchasePrice: 1000,
+      amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
+      residualValue: null, valuationTracking: false, currentValuation: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+    });
+
+    await RecurringExpenseRepository.create({
+      assetId: asset.id, name: 'Phone Bill', amount: 50,
+      effectiveFrom: '2025-01', effectiveTo: null,
+    });
+
+    // Verify expense is active before retirement
+    const expensesBefore = await RecurringExpenseRepository.getByAsset(asset.id);
+    expect(expensesBefore).toHaveLength(1);
+    expect(expensesBefore[0].effectiveTo).toBeNull();
+    expect(expensesBefore[0].endedReason).toBeNull();
+
+    await AssetRepository.markRetired(asset.id);
+
+    // After retirement: expense should be ended with reason 'retired'
+    const expensesAfter = await RecurringExpenseRepository.getByAsset(asset.id);
+    expect(expensesAfter).toHaveLength(1);
+    expect(expensesAfter[0].effectiveTo).not.toBeNull();
+    expect(expensesAfter[0].endedReason).toBe('retired');
+
+    // Asset status should also be retired
+    const updated = await AssetRepository.getById(asset.id);
+    expect(updated!.status).toBe(AssetStatus.RETIRED);
+  });
+
+  test('restoreActive only restores retired expenses', async () => {
+    const asset = await AssetRepository.create({
+      name: 'Test', category: AssetCategory.ELECTRONICS,
+      purchaseDate: '2025-01-01', purchasePrice: 1000,
+      amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
+      residualValue: null, valuationTracking: false, currentValuation: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+    });
+
+    // Create two recurring expenses
+    const expense1 = await RecurringExpenseRepository.create({
+      assetId: asset.id, name: 'Expense1', amount: 50,
+      effectiveFrom: '2025-01', effectiveTo: null,
+    });
+    const expense2 = await RecurringExpenseRepository.create({
+      assetId: asset.id, name: 'Expense2', amount: 30,
+      effectiveFrom: '2025-01', effectiveTo: null,
+    });
+
+    // Manually end expense1 with reason 'manual'
+    await RecurringExpenseRepository.endExpenseWithReason(expense1.id, '2025-03', 'manual');
+
+    // Retire the asset — this will end expense2 with reason 'retired'
+    await AssetRepository.markRetired(asset.id);
+
+    // Verify both expenses are ended with correct reasons
+    let expenses = await RecurringExpenseRepository.getByAsset(asset.id);
+    expect(expenses).toHaveLength(2);
+    const e1 = expenses.find(e => e.name === 'Expense1')!;
+    const e2 = expenses.find(e => e.name === 'Expense2')!;
+    expect(e1.effectiveTo).toBe('2025-03');
+    expect(e1.endedReason).toBe('manual');
+    expect(e2.effectiveTo).not.toBeNull();
+    expect(e2.endedReason).toBe('retired');
+
+    // Restore the asset to active
+    await AssetRepository.restoreActive(asset.id);
+
+    // Only expense2 (retired reason) should be restored; expense1 (manual) stays ended
+    expenses = await RecurringExpenseRepository.getByAsset(asset.id);
+    expect(expenses).toHaveLength(2);
+    const e1After = expenses.find(e => e.name === 'Expense1')!;
+    const e2After = expenses.find(e => e.name === 'Expense2')!;
+    expect(e1After.effectiveTo).toBe('2025-03');
+    expect(e1After.endedReason).toBe('manual');
+    expect(e2After.effectiveTo).toBeNull();
+    expect(e2After.endedReason).toBeNull();
+
+    // Asset should be active again
+    const updated = await AssetRepository.getById(asset.id);
+    expect(updated!.status).toBe(AssetStatus.ACTIVE);
   });
 });

@@ -34,11 +34,13 @@ import { AppChip } from '@/components/ui/Chip';
 import { AppFAB } from '@/components/ui/FAB';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
+import { useToast } from '@/hooks/useToast';
 
 type StatusFilter = 'all' | AssetStatus;
 
 export default function AssetsScreen() {
   const theme = useAppTheme();
+  const toast = useToast();
   const { assets, statusFilter, loadAssets, setStatusFilter, deleteAsset } = useAssetStore();
   const { currencySymbol } = useSettingsStore();
   const [showAdd, setShowAdd] = useState(false);
@@ -86,6 +88,7 @@ export default function AssetsScreen() {
           try {
             await deleteAsset(asset.id);
             setDetailAsset(null);
+            toast.show('资产已删除', 'success');
           } catch (err) {
             Alert.alert('删除失败', (err as Error).message);
           }
@@ -210,7 +213,7 @@ export default function AssetsScreen() {
       <AppFAB icon="Plus" label="添加资产" onPress={() => setShowAdd(true)} />
 
       {/* Modals — will be updated in Phase 11 */}
-      <AddAssetModal visible={showAdd} onClose={() => setShowAdd(false)} onSaved={() => loadAssets()} />
+      <AddAssetModal visible={showAdd} onClose={() => setShowAdd(false)} onSaved={() => { loadAssets(); toast.show('资产已保存', 'success'); }} />
       <AssetDetailModal asset={detailAsset} onClose={() => setDetailAsset(null)} />
     </View>
   );

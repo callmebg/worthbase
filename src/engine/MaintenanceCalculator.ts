@@ -38,7 +38,7 @@ export const MaintenanceCalculator = {
       let remainingMonths: number;
       if (asset.expectedLifespanMonths && asset.expectedLifespanMonths > 0) {
         const monthsBeforeMaintenance = monthsBetween(asset.purchaseDate, maintenanceDate);
-        remainingMonths = Math.max(1, asset.expectedLifespanMonths - monthsBeforeMaintenance + 1);
+        remainingMonths = Math.max(1, asset.expectedLifespanMonths - monthsBeforeMaintenance);
       } else {
         // No expected lifespan: spread over months held since maintenance
         remainingMonths = Math.max(1, monthsSinceMaintenance);
@@ -95,7 +95,7 @@ export const MaintenanceCalculator = {
       let remainingMonths: number;
       if (asset.expectedLifespanMonths && asset.expectedLifespanMonths > 0) {
         const monthsBeforeMaintenance = monthsBetween(asset.purchaseDate, maintenanceDate);
-        remainingMonths = Math.max(1, asset.expectedLifespanMonths - monthsBeforeMaintenance + 1);
+        remainingMonths = Math.max(1, asset.expectedLifespanMonths - monthsBeforeMaintenance);
       } else {
         remainingMonths = Math.max(1, monthsSinceMaintenance);
       }

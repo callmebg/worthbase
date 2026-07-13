@@ -13,7 +13,6 @@ import {
   Dimensions,
   RefreshControl,
   TouchableOpacity,
-  Alert,
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,12 +24,14 @@ import { useAccountStore } from '@/stores/account-store';
 import { useAssetStore } from '@/stores/asset-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { NetWorthCalculator } from '@/engine/NetWorthCalculator';
+import { ProjectionCalculator } from '@/engine/ProjectionCalculator';
 import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
 import { getStrategy } from '@/engine/strategies';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
+import { spacing } from '@/theme/tokens';
 import type { NetWorthResult, ValuationHistory } from '@/types/models';
 import { formatCurrency, formatCompactCurrency } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
@@ -38,6 +39,10 @@ import { AppChip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { OnboardingView } from '@/components/OnboardingView';
 import { TimeRangeSheet, type TimeRangeState, type TimeRangePreset } from '@/components/TimeRangeSheet';
+import { NetWorthExplainer } from '@/components/NetWorthExplainer';
+import { AppBottomSheet } from '@/components/ui/BottomSheet';
+import { AppTextInput } from '@/components/ui/TextInput';
+import { AppButton } from '@/components/ui/Button';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -46,7 +51,7 @@ export default function DashboardScreen() {
   const theme = useAppTheme();
   const { accounts, balances, loadAccounts } = useAccountStore();
   const { assets, loadAssets } = useAssetStore();
-  const { netWorthGoal, currencySymbol } = useSettingsStore();
+  const { netWorthGoal, currencySymbol, update } = useSettingsStore();
 
   const [netWorth, setNetWorth] = useState<NetWorthResult | null>(null);
   const [totalMonthlyCost, setTotalMonthlyCost] = useState(0);
@@ -58,6 +63,10 @@ export default function DashboardScreen() {
   const [fullscreenChart, setFullscreenChart] = useState(false);
   const [fullscreenKey, setFullscreenKey] = useState(0);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [showExplainer, setShowExplainer] = useState(false);
+  const [achievementDate, setAchievementDate] = useState<string | null>(null);
+  const [showGoalSheet, setShowGoalSheet] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
 
   // Lock to landscape when fullscreen chart is open
   useEffect(() => {
@@ -194,6 +203,13 @@ export default function DashboardScreen() {
       allPoints.push({ date, value: totalBalance + totalValuation - totalUnamortized });
     }
 
+    // Estimate goal achievement date based on historical trend
+    if (netWorthGoal && allPoints.length >= 2) {
+      setAchievementDate(ProjectionCalculator.estimateAchievementDate(allPoints, netWorthGoal));
+    } else {
+      setAchievementDate(null);
+    }
+
     // Downsample to ≤ MAX_POINTS preserving peaks and valleys
     const MAX_POINTS = 24;
     const sampled = allPoints.length > MAX_POINTS
@@ -203,7 +219,7 @@ export default function DashboardScreen() {
     const labels = sampled.map(p => p.date.substring(5));
     const points = sampled.map(p => p.value);
     setTrendData({ labels, datasets: [{ data: points }] });
-  }, [assets, accounts, timeRange]);
+  }, [assets, accounts, timeRange, netWorthGoal]);
 
   useFocusEffect(useCallback(() => {
     loadAccounts();
@@ -221,6 +237,7 @@ export default function DashboardScreen() {
   };
 
   const progress = netWorthGoal ? Math.min(100, (netWorth?.netWorth ?? 0) / netWorthGoal * 100) : 0;
+  const progressWidth = Math.max(0, progress);
   const totalCatValue = categoryBreakdown.reduce((s, c) => s + c.value, 0);
 
   const timeRangeLabels: Record<TimeRangePreset, string> = {
@@ -235,6 +252,18 @@ export default function DashboardScreen() {
   const rangeDisplayText = isCustomRange
     ? `${timeRange.start.replace('-', '.')} – ${timeRange.end.replace('-', '.')}`
     : '';
+
+  const handleSaveGoal = async () => {
+    const goal = parseFloat(goalInput) || null;
+    await update({ netWorthGoal: goal });
+    setGoalInput('');
+    setShowGoalSheet(false);
+  };
+
+  const handleClearGoal = async () => {
+    await update({ netWorthGoal: null });
+    setShowGoalSheet(false);
+  };
 
   return (
     <>
@@ -251,57 +280,64 @@ export default function DashboardScreen() {
       {/* ── Net Worth Hero Card ── */}
       <View style={[styles.heroCard, { backgroundColor: theme.colors.primary }]}>
         <View style={styles.heroLabelRow}>
-          <Text style={styles.heroLabel}>总净资产</Text>
+          <View style={styles.heroLabelLeft}>
+            <Text style={[styles.heroLabel, { color: theme.colors.onPrimary }]}>总净资产</Text>
+            <TouchableOpacity
+              onPress={() => setShowExplainer(true)}
+              style={styles.infoIconBtn}
+            >
+              <Icon name="Info" size={14} color={theme.colors.onPrimary} />
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert(
-                '净资产计算方式',
-                '净资产 = 流动资产 + 资产估值 - 未分摊成本\n\n' +
-                '• 流动资产：所有账户最新余额之和（账户页）\n' +
-                '• 资产估值：已开启估值追踪的在用资产的当前估值之和（资产页）\n' +
-                '• 未分摊成本：各资产购入价中尚未分摊完毕的部分\n\n' +
-                '通俗理解：如果今天把所有东西按估值卖掉，再扣除还没"消费完"的购入成本，你实际剩多少。',
-              )
-            }
-            style={styles.infoIconBtn}
+            onPress={() => setShowGoalSheet(true)}
+            style={styles.goalIconBtn}
           >
-            <Icon name="Info" size={14} color="#fff" />
+            <Icon name="Target" size={16} color={theme.colors.onPrimary} />
           </TouchableOpacity>
         </View>
-        <Text style={styles.heroAmount}>
+        <Text style={[styles.heroAmount, { color: theme.colors.onPrimary }]}>
           {formatCurrency(netWorth?.netWorth ?? 0, currencySymbol)}
         </Text>
 
         {netWorthGoal ? (
           <View style={styles.progressRow}>
             <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progress}%` }]} />
+              <View style={[styles.progressFill, { width: `${progressWidth}%`, backgroundColor: theme.colors.onPrimary }]} />
             </View>
-            <Text style={styles.progressText}>
+            <Text style={[styles.progressText, { color: theme.colors.onPrimary }, progress < 0 && { color: theme.colors.error }]}>
               {progress.toFixed(0)}% / {formatCompactCurrency(netWorthGoal, currencySymbol)}
             </Text>
           </View>
         ) : null}
 
+        {netWorthGoal && progress < 100 && (
+          <Text style={[styles.goalHint, { color: theme.colors.onPrimary }]}>
+            {achievementDate
+              ? `预计 ${achievementDate.substring(0, 4)}年${achievementDate.substring(5, 7)}月 达成`
+              : '按当前趋势暂无法预估'}
+          </Text>
+        )}
+
         <View style={styles.breakdownRow}>
-          <Text style={styles.breakdownOp}>=</Text>
+          <Text style={[styles.breakdownOp, { color: theme.colors.onPrimary }]}>=</Text>
           <View style={styles.breakdownItem}>
-            <Text style={styles.breakdownLabel}>流动资产</Text>
-            <Text style={styles.breakdownValue}>
+            <Text style={[styles.breakdownLabel, { color: theme.colors.onPrimary }]}>流动资产</Text>
+            <Text style={[styles.breakdownValue, { color: theme.colors.onPrimary }]}>
               {formatCompactCurrency(netWorth?.liquidAssets ?? 0, currencySymbol)}
             </Text>
           </View>
-          <Text style={styles.breakdownOp}>+</Text>
+          <Text style={[styles.breakdownOp, { color: theme.colors.onPrimary }]}>+</Text>
           <View style={styles.breakdownItem}>
-            <Text style={styles.breakdownLabel}>资产估值</Text>
-            <Text style={styles.breakdownValue}>
+            <Text style={[styles.breakdownLabel, { color: theme.colors.onPrimary }]}>资产估值</Text>
+            <Text style={[styles.breakdownValue, { color: theme.colors.onPrimary }]}>
               {formatCompactCurrency(netWorth?.assetValuations ?? 0, currencySymbol)}
             </Text>
           </View>
-          <Text style={styles.breakdownOp}>-</Text>
+          <Text style={[styles.breakdownOp, { color: theme.colors.onPrimary }]}>-</Text>
           <View style={styles.breakdownItem}>
-            <Text style={styles.breakdownLabel}>未分摊成本</Text>
-            <Text style={styles.breakdownValue}>
+            <Text style={[styles.breakdownLabel, { color: theme.colors.onPrimary }]}>未分摊成本</Text>
+            <Text style={[styles.breakdownValue, { color: theme.colors.onPrimary }]}>
               {formatCompactCurrency(netWorth?.unamortizedCost ?? 0, currencySymbol)}
             </Text>
           </View>
@@ -415,7 +451,7 @@ export default function DashboardScreen() {
                 <Text style={[styles.deltaLabel, { color: theme.colors.onSurfaceVariant }]}>
                   期间变化
                 </Text>
-                <Text style={[styles.deltaValue, { color: isPositive ? '#00B894' : '#EA3943' }]}>
+                <Text style={[styles.deltaValue, { color: isPositive ? theme.colors.success : theme.colors.error }]}>
                   {isPositive ? '+' : ''}{formatCurrency(delta, currencySymbol)}
                   {' '}({isPositive ? '+' : ''}{pct.toFixed(1)}%)
                 </Text>
@@ -465,7 +501,7 @@ export default function DashboardScreen() {
 
         {costBreakdown.length > 0 && (
           <View style={styles.costBreakdownList}>
-            {costBreakdown.map((item, i) => {
+            {costBreakdown.slice(0, 3).map((item, i) => {
               const pct = totalMonthlyCost > 0 ? (item.cost / totalMonthlyCost * 100) : 0;
               const iconName = ASSET_CATEGORY_ICONS[item.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
               return (
@@ -489,6 +525,16 @@ export default function DashboardScreen() {
                 </View>
               );
             })}
+            {costBreakdown.length > 3 && (
+              <TouchableOpacity
+                onPress={() => router.push('/assets')}
+                style={styles.viewAllBtn}
+              >
+                <Text style={{ color: theme.colors.primary, fontSize: 14 }}>
+                  查看全部 {costBreakdown.length} 项 →
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </AppCard>
@@ -605,6 +651,36 @@ export default function DashboardScreen() {
       }}
       currentRange={timeRange}
     />
+
+    {/* ── Net Worth Explainer Sheet ── */}
+    <NetWorthExplainer
+      visible={showExplainer}
+      onClose={() => setShowExplainer(false)}
+    />
+
+    {/* ── Net Worth Goal Sheet ── */}
+    <AppBottomSheet visible={showGoalSheet} onClose={() => { setShowGoalSheet(false); setGoalInput(''); }} snapPoints={['50%']}>
+      <Text style={[styles.sheetTitle, { color: theme.colors.onSurface }]}>设置净资产目标</Text>
+      {netWorthGoal ? (
+        <Text style={[styles.currentGoalText, { color: theme.colors.onSurfaceVariant }]}>
+          当前目标：{formatCurrency(netWorthGoal, currencySymbol)}
+        </Text>
+      ) : null}
+      <AppTextInput bottomSheet
+        label="目标金额"
+        value={goalInput}
+        onChangeText={setGoalInput}
+        keyboardType="decimal-pad"
+        autoFocus
+      />
+      <View style={styles.sheetActions}>
+        <AppButton title="取消" variant="text" onPress={() => { setShowGoalSheet(false); setGoalInput(''); }} style={{ flex: 1 }} />
+        <AppButton title="保存" variant="primary" onPress={handleSaveGoal} disabled={!goalInput.trim()} style={{ flex: 1 }} />
+      </View>
+      {netWorthGoal ? (
+        <AppButton title="清除目标" variant="text" onPress={handleClearGoal} style={{ marginTop: spacing.sm }} />
+      ) : null}
+    </AppBottomSheet>
     </>
   );
 }
@@ -652,78 +728,86 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   // Hero card
   heroCard: {
-    margin: 16,
+    margin: spacing.md,
     borderRadius: 20,
-    padding: 24,
+    padding: spacing.lg,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 6,
   },
-  heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  heroLabel: { color: '#fff', fontSize: 14, opacity: 0.85 },
+  heroLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroLabelLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  goalIconBtn: { opacity: 0.7, padding: 2 },
+  heroLabel: { fontSize: 14, opacity: 0.85 },
   infoIconBtn: { opacity: 0.7, padding: 2 },
-  heroAmount: { color: '#fff', fontSize: 36, fontWeight: '700', marginTop: 4 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
+  heroAmount: { fontSize: 36, fontWeight: '700', marginTop: spacing.xs },
+  progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm + spacing.xs, gap: spacing.sm },
   progressBar: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 3 },
-  progressFill: { height: 6, borderRadius: 3, backgroundColor: '#fff' },
-  progressText: { color: '#fff', fontSize: 12, opacity: 0.8 },
-  breakdownRow: { flexDirection: 'row', marginTop: 16, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  breakdownOp: { color: '#fff', fontSize: 13, opacity: 0.6, fontWeight: '500' },
+  progressFill: { height: 6, borderRadius: 3 },
+  progressText: { fontSize: 12, opacity: 0.8 },
+  goalHint: { fontSize: 12, marginTop: 6, opacity: 0.7 },
+  breakdownRow: { flexDirection: 'row', marginTop: spacing.md, alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  breakdownOp: { fontSize: 13, opacity: 0.6, fontWeight: '500' },
   breakdownItem: { alignItems: 'center' },
-  breakdownLabel: { color: '#fff', fontSize: 11, opacity: 0.7 },
-  breakdownValue: { color: '#fff', fontSize: 14, fontWeight: '600', marginTop: 2 },
+  breakdownLabel: { fontSize: 11, opacity: 0.7 },
+  breakdownValue: { fontSize: 14, fontWeight: '600', marginTop: 2 },
   // Sections
-  section: { marginHorizontal: 16, marginBottom: 16 },
+  section: { marginHorizontal: spacing.md, marginBottom: spacing.md },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '700' },
   // Category breakdown
-  catRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 8 },
+  catRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, gap: spacing.sm },
   catLabel: { fontSize: 13, width: 52 },
   catBarBg: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
   catBarFill: { height: 8, borderRadius: 4 },
   catPct: { fontSize: 12, width: 36, textAlign: 'right' },
   // Range toggle
   rangeToggle: { flexDirection: 'row' },
-  chartHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  fullscreenBtn: { padding: 4 },
-  rangeChip: { marginRight: 4, marginBottom: 0 },
+  chartHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  fullscreenBtn: { padding: spacing.xs },
+  rangeChip: { marginRight: spacing.xs, marginBottom: 0 },
   // Chart
-  chart: { borderRadius: 8, marginTop: 8 },
-  emptyChart: { height: 180, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  chart: { borderRadius: 8, marginTop: spacing.sm },
+  emptyChart: { height: 180, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   emptyText: { fontSize: 15, fontWeight: '500' },
   emptySubtext: { fontSize: 12 },
   // Delta row
-  deltaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingHorizontal: 4 },
+  deltaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm + spacing.xs, paddingHorizontal: spacing.xs },
   deltaLabel: { fontSize: 13 },
   deltaValue: { fontSize: 14, fontWeight: '600' },
   // Cost
-  costInner: { borderRadius: 12, padding: 16, marginTop: 8 },
-  costRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  costInner: { borderRadius: 12, padding: spacing.md, marginTop: spacing.sm },
+  costRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   costLabel: { fontSize: 14 },
   costValue: { fontSize: 18, fontWeight: '700' },
   costValuePrimary: { fontSize: 18, fontWeight: '700' },
-  costTag: { fontSize: 12, marginTop: 4, fontStyle: 'italic' },
-  costBreakdownList: { marginTop: 12 },
-  costBreakdownRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, gap: 8 },
+  costTag: { fontSize: 12, marginTop: spacing.xs, fontStyle: 'italic' },
+  costBreakdownList: { marginTop: spacing.sm + spacing.xs },
+  costBreakdownRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, gap: spacing.sm },
   costBreakdownName: { flex: 1, fontSize: 14 },
   costPctBarBg: { width: 40, height: 6, borderRadius: 3, overflow: 'hidden' },
   costPctBarFill: { height: 6, borderRadius: 3 },
   costBreakdownPct: { fontSize: 12, width: 36, textAlign: 'right' },
   costBreakdownCost: { fontSize: 14, fontWeight: '600', width: 80, textAlign: 'right' },
+  viewAllBtn: { paddingVertical: spacing.sm + spacing.xs, alignItems: 'center' },
+  // Goal sheet
+  sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: spacing.md },
+  currentGoalText: { fontSize: 14, marginBottom: spacing.sm + spacing.xs },
+  sheetActions: { flexDirection: 'row', gap: spacing.sm + spacing.xs },
   // Quick actions
-  quickActions: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, paddingBottom: 32 },
+  quickActions: { flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm + spacing.xs, paddingBottom: spacing.xl },
   quickBtn: { flex: 1 },
-  quickBtnContent: { alignItems: 'center', paddingVertical: 8 },
-  quickBtnText: { fontSize: 12, marginTop: 8 },
+  quickBtnContent: { alignItems: 'center', paddingVertical: spacing.sm },
+  quickBtnText: { fontSize: 12, marginTop: spacing.sm },
   // Fullscreen chart
   fullscreenContainer: { flex: 1 },
   fullscreenHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.sm + spacing.xs,
+    paddingVertical: spacing.sm,
     minHeight: 52,
   },
   fullscreenTitle: { fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
@@ -735,14 +819,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fullscreenRange: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  fullscreenChartWrap: { flex: 1, paddingHorizontal: 8, paddingBottom: 4 },
+  fullscreenRange: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  fullscreenChartWrap: { flex: 1, paddingHorizontal: spacing.sm, paddingBottom: spacing.xs },
   // Custom range controls
   calendarBtn: { padding: 6 },
-  backToPresetBtn: { padding: 4 },
-  rangeTextBtn: { paddingHorizontal: 4 },
+  backToPresetBtn: { padding: spacing.xs },
+  rangeTextBtn: { paddingHorizontal: spacing.xs },
   rangeTextValue: { fontSize: 13, fontWeight: '600' },
   customRangeBar: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  fsCustomRange: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  fsCustomRange: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   fsCustomRangeText: { fontSize: 13, fontWeight: '600' },
 });

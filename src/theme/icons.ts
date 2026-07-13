@@ -34,6 +34,7 @@ export const ASSET_CATEGORY_ICONS: Record<AssetCategory, string> = {
   [AssetCategory.FURNITURE]: 'Armchair',
   [AssetCategory.APPLIANCE]: 'Plug',
   [AssetCategory.LUXURY]: 'Watch',
+  [AssetCategory.PRECIOUS_METAL]: 'Gem',
   [AssetCategory.OTHER]: 'Package',
 };
 

@@ -18,6 +18,7 @@ import { useAccountStore } from '@/stores/account-store';
 import { BackupService } from '@/services/backup-service';
 import { LockScreen } from '@/components/LockScreen';
 import { ThemeProvider } from '@/theme/ThemeProvider';
+import { ToastProvider } from '@/hooks/useToast';
 
 const TAB_CONFIG = [
   { name: 'index', title: '总览', Icon: LayoutDashboard },
@@ -100,48 +101,50 @@ function RootLayoutInner() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1 }}>
-        <Tabs
-          screenOptions={{
-            headerShown: true,
-            tabBarActiveTintColor: theme.colors.primary,
-            tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
-            tabBarStyle: {
-              paddingBottom: 4,
-              backgroundColor: theme.colors.surface,
-              borderTopColor: theme.colors.outline,
-            },
-            headerStyle: {
-              backgroundColor: theme.colors.surface,
-            },
-            headerTintColor: theme.colors.onSurface,
-          }}
-        >
-          {TAB_CONFIG.map(tab => {
-            const { Icon: TabIcon } = tab;
-            return (
-              <Tabs.Screen
-                key={tab.name}
-                name={tab.name}
-                options={{
-                  title: tab.title,
-                  tabBarLabel: tab.title,
-                  tabBarIcon: ({ color, size }) => (
-                    <TabIcon size={size} color={color} strokeWidth={2} />
-                  ),
-                }}
-              />
-            );
-          })}
-        </Tabs>
+    <ToastProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View style={{ flex: 1 }}>
+          <Tabs
+            screenOptions={{
+              headerShown: true,
+              tabBarActiveTintColor: theme.colors.primary,
+              tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
+              tabBarStyle: {
+                paddingBottom: 4,
+                backgroundColor: theme.colors.surface,
+                borderTopColor: theme.colors.outline,
+              },
+              headerStyle: {
+                backgroundColor: theme.colors.surface,
+              },
+              headerTintColor: theme.colors.onSurface,
+            }}
+          >
+            {TAB_CONFIG.map(tab => {
+              const { Icon: TabIcon } = tab;
+              return (
+                <Tabs.Screen
+                  key={tab.name}
+                  name={tab.name}
+                  options={{
+                    title: tab.title,
+                    tabBarLabel: tab.title,
+                    tabBarIcon: ({ color, size }) => (
+                      <TabIcon size={size} color={color} strokeWidth={2} />
+                    ),
+                  }}
+                />
+              );
+            })}
+          </Tabs>
 
-        {/* Lock screen overlay — covers the entire app when locked */}
-        {isLocked && appLockEnabled && (
-          <LockScreen onUnlocked={handleUnlocked} themeColor={themeColor} />
-        )}
-      </View>
-    </GestureHandlerRootView>
+          {/* Lock screen overlay — covers the entire app when locked */}
+          {isLocked && appLockEnabled && (
+            <LockScreen onUnlocked={handleUnlocked} themeColor={themeColor} />
+          )}
+        </View>
+      </GestureHandlerRootView>
+    </ToastProvider>
   );
 }
 
