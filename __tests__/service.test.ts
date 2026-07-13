@@ -128,7 +128,7 @@ async function seedTestData() {
     purchaseDate: '2025-01-15', purchasePrice: 7999,
     amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: 24,
     residualValue: null, valuationTracking: true, currentValuation: 6000,
-    status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+    status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
   });
 
   await ValuationRepository.create({ assetId: asset.id, valuation: 6500, recordedDate: '2025-01-15' });
@@ -288,7 +288,7 @@ describe('ImportService', () => {
           purchaseDate: '2025-03-01', purchasePrice: 5000,
           amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
           residualValue: null, valuationTracking: false, currentValuation: null,
-          status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+          status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
         },
       ],
       balanceSnapshots: [],
@@ -345,7 +345,7 @@ describe('ImportService', () => {
           purchaseDate: '2025-02-01', purchasePrice: 15000,
           amortizationType: AmortizationType.EXPECTED_LIFESPAN, expectedLifespanMonths: 36,
           residualValue: 3000, valuationTracking: true, currentValuation: 12000,
-          status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+          status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
         },
       ],
       balanceSnapshots: [],

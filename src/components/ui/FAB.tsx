@@ -1,13 +1,13 @@
 /**
  * WorthBase Shared FAB Component
- * Wraps Paper FAB with Lucide icon support and optional text label.
+ * Custom implementation using TouchableOpacity to avoid Paper Surface elevation artifacts.
  */
 
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { FAB as PaperFAB } from 'react-native-paper';
+import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
 import { useTheme } from 'react-native-paper';
-import { radius } from '@/theme/tokens';
+import { Icon } from './Icon';
+import { radius, spacing } from '@/theme/tokens';
 
 interface AppFABProps {
   /** Lucide icon name */
@@ -30,30 +30,53 @@ export function AppFAB({
   style,
 }: AppFABProps) {
   const theme = useTheme();
+  const size = small ? 40 : 56;
 
   return (
-    <PaperFAB
-      icon={icon as never}
-      label={label}
+    <TouchableOpacity
       onPress={onPress}
-      small={small}
+      activeOpacity={0.85}
       style={[
         styles.fab,
         {
           backgroundColor: theme.colors.primary,
+          height: size,
+          minWidth: size,
+          borderRadius: size / 2,
+          paddingHorizontal: label ? spacing.md : 0,
+          width: label ? undefined : size,
         },
         style,
       ]}
-      color={theme.colors.onPrimary}
-    />
+    >
+      <Icon name={icon} size={24} color={theme.colors.onPrimary} />
+      {label ? (
+        <Text style={[styles.label, { color: theme.colors.onPrimary }]}>
+          {label}
+        </Text>
+      ) : null}
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   fab: {
-    borderRadius: radius.lg,
     position: 'absolute',
     right: 16,
     bottom: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    paddingRight: 4,
   },
 });

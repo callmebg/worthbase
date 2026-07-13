@@ -77,11 +77,6 @@ export default function DashboardScreen() {
     }
   }, [fullscreenChart]);
 
-  // Show onboarding when no accounts exist
-  if (accounts.length === 0) {
-    return <OnboardingView />;
-  }
-
   const loadData = useCallback(async () => {
     const now = new Date();
     const nw = await NetWorthCalculator.calculate(now);
@@ -229,6 +224,11 @@ export default function DashboardScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Show onboarding when no accounts exist
+  if (accounts.length === 0) {
+    return <OnboardingView />;
+  }
 
   const onRefresh = async () => {
     setRefreshing(true);

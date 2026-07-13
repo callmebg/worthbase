@@ -54,6 +54,8 @@ export interface Asset {
   sellDate: string | null; // ISO 8601 date
   /** Sell price (set when status becomes SOLD) */
   sellPrice: number | null;
+  /** Weight in grams (used for precious metals) */
+  weightGrams: number | null;
   /** Path to asset image file (local file system) */
   imagePath: string | null;
   createdAt: string; // ISO 8601

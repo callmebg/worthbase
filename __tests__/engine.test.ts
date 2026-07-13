@@ -36,6 +36,7 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
     status: AssetStatus.ACTIVE,
     sellDate: null,
     sellPrice: null,
+    weightGrams: null,
     imagePath: null,
     createdAt: '2025-01-15T00:00:00Z',
     updatedAt: '2025-01-15T00:00:00Z',

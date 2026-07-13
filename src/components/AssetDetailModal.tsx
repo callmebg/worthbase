@@ -221,6 +221,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
             <InfoRow label="分类" value={AssetCategoryLabels[asset.category]} theme={theme} />
             <InfoRow label="购入日期" value={formatDate(asset.purchaseDate)} theme={theme} />
             <InfoRow label="购入价格" value={formatCurrency(asset.purchasePrice)} theme={theme} />
+            {asset.weightGrams ? <InfoRow label="克数" value={`${asset.weightGrams} g`} theme={theme} /> : null}
             <InfoRow label="已持有" value={formatDuration(getMonthsHeld(asset.purchaseDate))} theme={theme} />
             <InfoRow label="分摊方式" value={AmortizationTypeLabels[asset.amortizationType]} theme={theme} />
             {asset.expectedLifespanMonths ? <InfoRow label="预期寿命" value={`${asset.expectedLifespanMonths} 个月`} theme={theme} /> : null}

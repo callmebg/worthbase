@@ -229,6 +229,7 @@ describe('Asset Repository', () => {
       status: AssetStatus.ACTIVE,
       sellDate: null,
       sellPrice: null,
+      weightGrams: null,
       imagePath: null,
     });
 
@@ -248,14 +249,14 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
     await AssetRepository.create({
       name: 'Retired Asset', category: AssetCategory.FURNITURE,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.RETIRED, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.RETIRED, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     const active = await AssetRepository.getByStatus(AssetStatus.ACTIVE);
@@ -273,14 +274,14 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
     await AssetRepository.create({
       name: 'Sofa', category: AssetCategory.FURNITURE,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     const electronics = await AssetRepository.getByCategory(AssetCategory.ELECTRONICS);
@@ -294,7 +295,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: 36,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await AssetRepository.update(asset.id, {
@@ -315,7 +316,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await AssetRepository.markRetired(asset.id);
@@ -329,7 +330,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await AssetRepository.recordSale(asset.id, '2025-06-15', 600);
@@ -345,7 +346,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await AssetRepository.delete(asset.id);
@@ -359,7 +360,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: 900,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await ValuationRepository.create({ assetId: asset.id, valuation: 900, recordedDate: '2025-01-01' });
@@ -385,7 +386,7 @@ describe('Valuation Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await ValuationRepository.create({ assetId: asset.id, valuation: 900, recordedDate: '2025-02-01' });
@@ -404,7 +405,7 @@ describe('Valuation Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await ValuationRepository.create({ assetId: asset.id, valuation: 900, recordedDate: '2025-01-01' });
@@ -423,14 +424,14 @@ describe('Valuation Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
     const asset2 = await AssetRepository.create({
       name: 'B', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await ValuationRepository.create({ assetId: asset1.id, valuation: 900, recordedDate: '2025-01-01' });
@@ -448,7 +449,7 @@ describe('Valuation Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     const record = await ValuationRepository.create({ assetId: asset.id, valuation: 900, recordedDate: '2025-01-01' });
@@ -590,7 +591,7 @@ describe('AssetRepository - markRetired with ended_reason', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     await RecurringExpenseRepository.create({
@@ -623,7 +624,7 @@ describe('AssetRepository - markRetired with ended_reason', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
     // Create two recurring expenses

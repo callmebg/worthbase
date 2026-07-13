@@ -358,6 +358,26 @@ export const MyNewStrategy: AmortizationStrategy = {
 
 迁移需**幂等**（重复执行不报错），并在 `CURRENT_VERSION` 常量中同步更新版本号。
 
+### 修改版本号
+
+发版时需同步更新以下 **4 个位置**：
+
+| # | 文件 | 字段 | 作用 |
+|---|------|------|------|
+| 1 | `package.json` | `"version"` | npm 包版本 |
+| 2 | `app.json` | `"version"` | Expo 配置，传递给原生构建 |
+| 3 | `android/app/build.gradle` | `versionName` | Android APK 显示的版本号 |
+| 4 | `app/settings.tsx` | `description="v..."` | 设置页 About 区域（硬编码） |
+
+另外需考虑：
+
+| # | 文件 | 字段 | 说明 |
+|---|------|------|------|
+| 5 | `android/app/build.gradle` | `versionCode` | Android 内部版本号，每次发版**必须递增**（Play Store 要求） |
+| 6 | `CHANGELOG.md` | 新增条目 | 记录该版本的变更内容 |
+
+> **注意**：`src/db/migrations.ts` 中的 `CURRENT_VERSION` 是数据库 schema 版本号，`src/services/export-service.ts` 中的 `version` 是导出格式版本号，二者与 App 版本号无关，仅在数据结构变更时更新。
+
 ### 代码规范
 - 运行测试：`npm test`
 - TypeScript 严格模式，路径别名 `@/` → `src/`

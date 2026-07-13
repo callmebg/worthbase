@@ -6,7 +6,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 interface Migration {
   version: number;
@@ -57,6 +57,21 @@ const migrations: Migration[] = [
       await db.execAsync(`
         CREATE INDEX IF NOT EXISTS idx_accounts_deleted_at ON accounts(deleted_at);
       `);
+    },
+  },
+  // Version 4: Add weight_grams to assets (for precious metals)
+  {
+    version: 4,
+    description: 'Add weight_grams column to assets for precious metals',
+    up: async (db: SQLiteDatabase) => {
+      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(assets);');
+      const hasWeightGrams = columns.some((column) => column.name === 'weight_grams');
+
+      if (!hasWeightGrams) {
+        await db.execAsync(`
+          ALTER TABLE assets ADD COLUMN weight_grams REAL;
+        `);
+      }
     },
   },
 ];

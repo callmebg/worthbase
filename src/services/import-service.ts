@@ -102,7 +102,8 @@ export const ImportService = {
             valuationTracking: a.valuationTracking ?? false,
             currentValuation: a.currentValuation ?? null,
             status: a.status, sellDate: a.sellDate ?? null,
-            sellPrice: a.sellPrice ?? null, imagePath: a.imagePath ?? null,
+            sellPrice: a.sellPrice ?? null, weightGrams: a.weightGrams ?? null,
+            imagePath: a.imagePath ?? null,
           });
           assetIdMap.set(a.id, created.id);
         }

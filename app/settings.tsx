@@ -345,7 +345,7 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>关于</Text>
         <AppListItem
           title="家底 WorthBase"
-          description="v1.0.1"
+          description="v1.1.1"
           icon="Info"
         />
         <Text style={[styles.aboutDesc, { color: theme.colors.onSurfaceVariant }]}>

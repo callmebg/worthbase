@@ -346,6 +346,26 @@ When modifying the schema, add a new migration in `src/db/migrations.ts`:
 
 Migrations must be **idempotent** (safe to run multiple times). Update the `CURRENT_VERSION` constant accordingly.
 
+### Bumping the Version Number
+
+When releasing a new version, update these **4 files in sync**:
+
+| # | File | Field | Purpose |
+|---|------|-------|---------|
+| 1 | `package.json` | `"version"` | npm package version |
+| 2 | `app.json` | `"version"` | Expo config, propagated to native builds |
+| 3 | `android/app/build.gradle` | `versionName` | Android APK display version |
+| 4 | `app/settings.tsx` | `description="v..."` | Settings → About section (hardcoded string) |
+
+Also consider:
+
+| # | File | Field | Note |
+|---|------|-------|------|
+| 5 | `android/app/build.gradle` | `versionCode` | Android internal version code — **must increment** for each Play Store release |
+| 6 | `CHANGELOG.md` | New entry | Document changes for the release |
+
+> **Note**: `CURRENT_VERSION` in `src/db/migrations.ts` is the database schema version, and `version` in `src/services/export-service.ts` is the export format version. Neither is related to the app version — only update them when the data structure changes.
+
 ### Code Conventions
 - Run tests: `npm test`
 - TypeScript strict mode, path alias `@/` → `src/`

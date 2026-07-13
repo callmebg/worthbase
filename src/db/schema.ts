@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS assets (
   status TEXT NOT NULL DEFAULT 'active',
   sell_date TEXT,
   sell_price REAL,
+  weight_grams REAL,
   image_path TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

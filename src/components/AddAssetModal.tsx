@@ -59,6 +59,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const [category, setCategory] = useState<AssetCategory>(AssetCategory.ELECTRONICS);
   const [purchaseDate, setPurchaseDate] = useState(getCurrentDate());
   const [purchasePrice, setPurchasePrice] = useState('');
+  const [weightGrams, setWeightGrams] = useState('');
 
   // Step 2 fields
   const [amortizationType, setAmortizationType] = useState<AmortizationType>(AmortizationType.SIMPLE_LINEAR);
@@ -128,7 +129,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
 
   const resetForm = () => {
     setStep(1); setName(''); setCategory(AssetCategory.ELECTRONICS);
-    setPurchaseDate(getCurrentDate()); setPurchasePrice('');
+    setPurchaseDate(getCurrentDate()); setPurchasePrice(''); setWeightGrams('');
     setAmortizationType(AmortizationType.SIMPLE_LINEAR);
     setExpectedLifespan(''); setResidualValue('');
     setValuationTracking(false); setCurrentValuation('');
@@ -148,6 +149,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       setCategory(editAsset.category);
       setPurchaseDate(editAsset.purchaseDate);
       setPurchasePrice(String(editAsset.purchasePrice));
+      setWeightGrams(editAsset.weightGrams ? String(editAsset.weightGrams) : '');
       setAmortizationType(editAsset.amortizationType);
       const lifespanStr = editAsset.expectedLifespanMonths ? String(editAsset.expectedLifespanMonths) : '';
       setExpectedLifespan(lifespanStr);
@@ -212,6 +214,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         residualValue: residualValue ? parseFloat(residualValue) : null,
         valuationTracking,
         currentValuation: currentValuation ? parseFloat(currentValuation) : (valuationTracking ? parseFloat(purchasePrice) || null : null),
+        weightGrams: category === AssetCategory.PRECIOUS_METAL && weightGrams.trim() ? parseFloat(weightGrams) : null,
         imagePath: null,
         sellDate: null,
         sellPrice: null,
@@ -309,6 +312,16 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
               keyboardType="decimal-pad"
               error={!priceValid ? '价格必须大于 0' : undefined}
             />
+
+            {category === AssetCategory.PRECIOUS_METAL && (
+              <AppTextInput bottomSheet
+                label="克数"
+                value={weightGrams}
+                onChangeText={setWeightGrams}
+                placeholder="如：50"
+                keyboardType="decimal-pad"
+              />
+            )}
           </>
         )}
 

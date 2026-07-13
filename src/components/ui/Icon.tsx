@@ -61,6 +61,7 @@ import {
   AlertCircle,
   PackagePlus,
   Maximize2,
+  Gem,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 
@@ -118,6 +119,7 @@ const ICON_REGISTRY: Record<string, LucideIcon> = {
   AlertCircle,
   PackagePlus,
   Maximize2,
+  Gem,
 };
 
 export type IconName = keyof typeof ICON_REGISTRY;
