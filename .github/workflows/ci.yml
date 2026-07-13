@@ -35,7 +35,15 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Install Android SDK command-line tools
+      - name: Restore Android SDK cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/android-sdk
+          key: android-sdk-${{ runner.os }}-v1
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
+
+      - name: Install Android SDK command-line tools (if needed)
         env:
           ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
         run: |
@@ -43,21 +51,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends unzip wget lib32stdc++6 lib32z1
           export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          cd "$ANDROID_SDK_ROOT/cmdline-tools"
-          # Download commandline tools (versioned URL provided by Google)
-          curl -fSL "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip" -o cmdline-tools.zip
-          unzip -q cmdline-tools.zip
-          # Move/normalize to cmdline-tools/latest
-          if [ -d cmdline-tools ]; then
-            mv cmdline-tools latest || true
+          if [ -d "$ANDROID_SDK_ROOT/platform-tools" ] && [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]; then
+            echo "Android SDK already present in cache, skipping download.";
           else
-            mkdir -p latest
-            mv * latest 2>/dev/null || true
+            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+            cd "$ANDROID_SDK_ROOT/cmdline-tools"
+            curl -fSL "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip" -o cmdline-tools.zip
+            unzip -q cmdline-tools.zip
+            if [ -d cmdline-tools ]; then
+              mv cmdline-tools latest || true
+            else
+              mkdir -p latest
+              mv * latest 2>/dev/null || true
+            fi
           fi
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
           yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
           sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+
+      - name: Save Android SDK to cache
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/android-sdk
+          key: android-sdk-${{ runner.os }}-v1
 
       - name: Show sdkmanager info
         env:
@@ -69,6 +86,16 @@ jobs:
 
       - name: Prebuild Android (generate native project)
         run: npx expo prebuild --platform android --non-interactive
+
+      - name: Restore Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
 
       - name: Make gradlew executable
         run: |
@@ -92,6 +119,15 @@ jobs:
           else
             echo "No android/gradlew found — skipping Gradle build.";
           fi
+
+      - name: Save Gradle cache
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle/wrapper/gradle-wrapper.properties') }}
 
       - name: Upload APK artifact if exists
         uses: actions/upload-artifact@v4
