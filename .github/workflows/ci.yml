@@ -9,13 +9,19 @@ env:
   CI: true
 
 jobs:
-  test-and-eas-build:
-    name: Test and (optional) EAS Build
+  test-and-local-build:
+    name: Test, install Android SDK, local Android build and upload artifacts
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -23,27 +29,85 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         run: npm ci
 
       - name: Run tests
         run: npm test
 
-      - name: Install EAS CLI
-        run: npm install -g eas-cli
-
-      - name: Run EAS build (Android preview)
+      - name: Install Android SDK command-line tools
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
         run: |
-          if [ -z "${EXPO_TOKEN}" ]; then
-            echo "EXPO_TOKEN is not set — skipping EAS build. To enable, add EXPO_TOKEN as a repository secret.";
-            exit 0;
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends unzip wget lib32stdc++6 lib32z1
+          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          cd "$ANDROID_SDK_ROOT/cmdline-tools"
+          # Download commandline tools (versioned URL provided by Google)
+          curl -fSL "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip" -o cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          # Move/normalize to cmdline-tools/latest
+          if [ -d cmdline-tools ]; then
+            mv cmdline-tools latest || true
+          else
+            mkdir -p latest
+            mv * latest 2>/dev/null || true
           fi
-          # Ensure we're logged in
-          eas whoami || eas login --token "$EXPO_TOKEN"
-          # Build Android using the 'preview' profile defined in eas.json
-          eas build --profile preview --platform android --non-interactive
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
+          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+
+      - name: Show sdkmanager info
+        env:
+          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+        run: |
+          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          sdkmanager --list --sdk_root="$ANDROID_SDK_ROOT" || true
+
+      - name: Prebuild Android (generate native project)
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Make gradlew executable
+        run: |
+          if [ -f android/gradlew ]; then
+            chmod +x android/gradlew
+          fi
+
+      - name: Build Android release APK (local)
+        env:
+          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+          GRADLE_USER_HOME: ${{ runner.temp }}/.gradle
+        working-directory: android
+        run: |
+          set -e
+          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          if [ -f gradlew ]; then
+            echo "Starting local Gradle build..."
+            ./gradlew assembleRelease || (echo "Gradle build failed"; exit 0)
+          else
+            echo "No android/gradlew found — skipping Gradle build.";
+          fi
+
+      - name: Upload APK artifact if exists
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/*/*/*.apk
+          if-no-files-found: warn
+
+      - name: Upload generated android project (fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-project
+          path: android
+          if-no-files-found: warn
 
       - name: Finish
-        run: echo "Workflow finished. If EAS build ran, check EAS dashboard or logs for artifact URLs."
+        run: echo "Workflow finished. Check uploaded artifacts for APKs or the generated android project."
