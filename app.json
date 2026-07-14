@@ -33,7 +33,6 @@
     "plugins": [
       "expo-sqlite",
       "expo-secure-store",
-      "expo-sharing",
       "expo-router",
       "expo-local-authentication",
       "expo-file-system",

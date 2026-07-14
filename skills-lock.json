@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "steve-jobs-perspective": {
+      "source": "alchaincyf/steve-jobs-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "ede061c62a1126c4b4027b6b5be750ebe4bbd59888a450538afe4a0a65a81804"
+    }
+  }
+}
