@@ -24,8 +24,10 @@ const TAB_CONFIG = [
   { name: 'index', title: '总览', Icon: LayoutDashboard },
   { name: 'accounts', title: '账户', Icon: Wallet },
   { name: 'assets', title: '资产', Icon: Package },
-  { name: 'settings', title: '设置', Icon: Settings },
 ];
+
+/** Settings is hidden from tab bar — accessed via gear icon on dashboard */
+const HIDDEN_TABS = ['settings'];
 
 export default function RootLayout() {
   return (
@@ -136,6 +138,16 @@ function RootLayoutInner() {
                 />
               );
             })}
+            {HIDDEN_TABS.map(name => (
+              <Tabs.Screen
+                key={name}
+                name={name}
+                options={{
+                  href: null,
+                  title: name === 'settings' ? '设置' : name,
+                }}
+              />
+            ))}
           </Tabs>
 
           {/* Lock screen overlay — covers the entire app when locked */}

@@ -1,6 +1,6 @@
 /**
  * WorthBase (家底) - Net Worth Calculator
- * Calculates net worth = liquid assets + asset valuations - unamortized purchase costs.
+ * Calculates net worth = account balances + asset valuations.
  */
 
 import { AccountRepository } from '@/db/account-repository';
@@ -42,7 +42,7 @@ export const NetWorthCalculator = {
       unamortizedCost += remaining;
     }
 
-    const netWorth = liquidAssets + assetValuations - unamortizedCost;
+    const netWorth = liquidAssets + assetValuations;
 
     return {
       liquidAssets,

@@ -22,7 +22,9 @@ export const ACCOUNT_TYPE_ICONS: Record<AccountType, string> = {
   [AccountType.BANK_CARD]: 'Building2',
   [AccountType.CASH]: 'Banknote',
   [AccountType.FUND]: 'TrendingUp',
-  [AccountType.OTHER]: 'CreditCard',
+  [AccountType.CREDIT_CARD]: 'CreditCard',
+  [AccountType.LOAN]: 'HandCoins',
+  [AccountType.OTHER]: 'MoreHorizontal',
 };
 
 /** Asset category icons */
@@ -31,8 +33,7 @@ export const ASSET_CATEGORY_ICONS: Record<AssetCategory, string> = {
   [AssetCategory.REAL_ESTATE]: 'Home',
   [AssetCategory.ELECTRONICS]: 'Smartphone',
   [AssetCategory.DIGITAL]: 'Laptop',
-  [AssetCategory.FURNITURE]: 'Armchair',
-  [AssetCategory.APPLIANCE]: 'Plug',
+  [AssetCategory.HOME]: 'Sofa',
   [AssetCategory.LUXURY]: 'Watch',
   [AssetCategory.PRECIOUS_METAL]: 'Gem',
   [AssetCategory.OTHER]: 'Package',

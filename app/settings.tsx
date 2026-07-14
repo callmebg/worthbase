@@ -345,24 +345,24 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>关于</Text>
         <AppListItem
           title="家底 WorthBase"
-          description="v1.1.1"
+          description="v1.2.1"
           icon="Info"
         />
         <Text style={[styles.aboutDesc, { color: theme.colors.onSurfaceVariant }]}>
-          个人财务状态管理应用{'\n'}
-          隐私优先 · 本地存储 · 持有成本智能计算
+          你有多少钱，你的东西值多少，养它们每天花多少钱。{'\n'}
+          数据只存在你的手机上。
         </Text>
         <AppListItem
-          title="GitHub"
+          title="开源地址"
           description="github.com/callmebg/worthbase"
           icon="HardDrive"
           rightElement="chevron"
           onPress={() => Linking.openURL('https://github.com/callmebg/worthbase.git')}
         />
         <AppListItem
-          title="联系邮箱"
+          title="反馈与建议"
           description="497649129@qq.com"
-          icon="Info"
+          icon="MessageSquare"
           rightElement="chevron"
           onPress={() => Linking.openURL('mailto:497649129@qq.com')}
         />

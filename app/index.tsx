@@ -4,7 +4,7 @@
  * Redesigned with design system, Paper components, and Lucide icons.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/utils/format';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useNavigation } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { InteractiveTrendChart } from '@/components/InteractiveTrendChart';
 import { useAccountStore } from '@/stores/account-store';
@@ -31,12 +31,13 @@ import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
-import { spacing } from '@/theme/tokens';
+import { spacing, radius } from '@/theme/tokens';
 import type { NetWorthResult, ValuationHistory } from '@/types/models';
 import { formatCurrency, formatCompactCurrency } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
+import { Settings } from 'lucide-react-native';
 import { OnboardingView } from '@/components/OnboardingView';
 import { TimeRangeSheet, type TimeRangeState, type TimeRangePreset } from '@/components/TimeRangeSheet';
 import { NetWorthExplainer } from '@/components/NetWorthExplainer';
@@ -48,7 +49,23 @@ const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const theme = useAppTheme();
+
+  // Settings gear in header bar
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => router.push('/settings')}
+          style={{ marginRight: 8 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Settings size={20} color={theme.colors.onSurface} strokeWidth={2} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, router, theme.colors.onSurface]);
   const { accounts, balances, loadAccounts } = useAccountStore();
   const { assets, loadAssets } = useAssetStore();
   const { netWorthGoal, currencySymbol, update } = useSettingsStore();
@@ -116,7 +133,7 @@ export default function DashboardScreen() {
     setCategoryBreakdown(catBreakdown);
 
     // ── Trend data: same formula as hero card ──────────────────────────────────
-    // net worth = liquid assets + asset valuations − unamortized cost
+    // net worth = account balances + asset valuations
     const activeAccountIds = new Set(accounts.map(a => a.id));
     const trackedAssets = activeAssets.filter(a => a.valuationTracking);
 
@@ -188,14 +205,8 @@ export default function DashboardScreen() {
         totalValuation += latestVal ?? asset.purchasePrice;
       }
 
-      // 3. Unamortized cost — same strategy as hero card
-      let totalUnamortized = 0;
-      for (const asset of activeAssets) {
-        const strategy = getStrategy(asset);
-        totalUnamortized += strategy.calculateRemaining(asset, dateObj);
-      }
-
-      allPoints.push({ date, value: totalBalance + totalValuation - totalUnamortized });
+      // Net worth = account balances + asset valuations (matches hero card formula)
+      allPoints.push({ date, value: totalBalance + totalValuation });
     }
 
     // Estimate goal achievement date based on historical trend
@@ -281,7 +292,7 @@ export default function DashboardScreen() {
       <View style={[styles.heroCard, { backgroundColor: theme.colors.primary }]}>
         <View style={styles.heroLabelRow}>
           <View style={styles.heroLabelLeft}>
-            <Text style={[styles.heroLabel, { color: theme.colors.onPrimary }]}>总净资产</Text>
+            <Text style={[styles.heroLabel, { color: theme.colors.onPrimary }]}>净资产</Text>
             <TouchableOpacity
               onPress={() => setShowExplainer(true)}
               style={styles.infoIconBtn}
@@ -319,55 +330,7 @@ export default function DashboardScreen() {
           </Text>
         )}
 
-        <View style={styles.breakdownRow}>
-          <Text style={[styles.breakdownOp, { color: theme.colors.onPrimary }]}>=</Text>
-          <View style={styles.breakdownItem}>
-            <Text style={[styles.breakdownLabel, { color: theme.colors.onPrimary }]}>流动资产</Text>
-            <Text style={[styles.breakdownValue, { color: theme.colors.onPrimary }]}>
-              {formatCompactCurrency(netWorth?.liquidAssets ?? 0, currencySymbol)}
-            </Text>
-          </View>
-          <Text style={[styles.breakdownOp, { color: theme.colors.onPrimary }]}>+</Text>
-          <View style={styles.breakdownItem}>
-            <Text style={[styles.breakdownLabel, { color: theme.colors.onPrimary }]}>资产估值</Text>
-            <Text style={[styles.breakdownValue, { color: theme.colors.onPrimary }]}>
-              {formatCompactCurrency(netWorth?.assetValuations ?? 0, currencySymbol)}
-            </Text>
-          </View>
-          <Text style={[styles.breakdownOp, { color: theme.colors.onPrimary }]}>-</Text>
-          <View style={styles.breakdownItem}>
-            <Text style={[styles.breakdownLabel, { color: theme.colors.onPrimary }]}>未分摊成本</Text>
-            <Text style={[styles.breakdownValue, { color: theme.colors.onPrimary }]}>
-              {formatCompactCurrency(netWorth?.unamortizedCost ?? 0, currencySymbol)}
-            </Text>
-          </View>
-        </View>
       </View>
-
-      {/* ── Asset Category Visualization ── */}
-      {categoryBreakdown.length > 0 && (
-        <AppCard style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
-            资产分类
-          </Text>
-          {categoryBreakdown.map((cat) => {
-            const pct = totalCatValue > 0 ? (cat.value / totalCatValue * 100) : 0;
-            const iconName = ASSET_CATEGORY_ICONS[cat.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
-            return (
-              <View key={cat.category} style={styles.catRow}>
-                <Icon name={iconName} size={18} color="onSurfaceVariant" />
-                <Text style={[styles.catLabel, { color: theme.colors.onSurface }]}>{cat.label}</Text>
-                <View style={[styles.catBarBg, { backgroundColor: theme.colors.surfaceVariant }]}>
-                  <View style={[styles.catBarFill, { width: `${pct}%`, backgroundColor: theme.colors.primary }]} />
-                </View>
-                <Text style={[styles.catPct, { color: theme.colors.onSurfaceVariant }]}>
-                  {pct.toFixed(0)}%
-                </Text>
-              </View>
-            );
-          })}
-        </AppCard>
-      )}
 
       {/* ── Trend Chart ── */}
       <AppCard style={styles.section}>
@@ -525,56 +488,18 @@ export default function DashboardScreen() {
                 </View>
               );
             })}
-            {costBreakdown.length > 3 && (
-              <TouchableOpacity
-                onPress={() => router.push('/assets')}
-                style={styles.viewAllBtn}
-              >
-                <Text style={{ color: theme.colors.primary, fontSize: 14 }}>
-                  查看全部 {costBreakdown.length} 项 →
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              onPress={() => router.push('/assets')}
+              style={styles.viewAllBtn}
+            >
+              <Text style={{ color: theme.colors.primary, fontSize: 14 }}>
+                查看全部 {costBreakdown.length} 项 →
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </AppCard>
 
-      {/* ── Quick Actions ── */}
-      <View style={styles.quickActions}>
-        <AppCard
-          onPress={() => router.push('/accounts')}
-          style={styles.quickBtn}
-        >
-          <View style={styles.quickBtnContent}>
-            <Icon name="Wallet" size={28} color="primary" />
-            <Text style={[styles.quickBtnText, { color: theme.colors.onSurfaceVariant }]}>
-              更新余额
-            </Text>
-          </View>
-        </AppCard>
-        <AppCard
-          onPress={() => router.push('/assets')}
-          style={styles.quickBtn}
-        >
-          <View style={styles.quickBtnContent}>
-            <Icon name="PackagePlus" size={28} color="primary" />
-            <Text style={[styles.quickBtnText, { color: theme.colors.onSurfaceVariant }]}>
-              添加资产
-            </Text>
-          </View>
-        </AppCard>
-        <AppCard
-          onPress={() => router.push('/settings')}
-          style={styles.quickBtn}
-        >
-          <View style={styles.quickBtnContent}>
-            <Icon name="Download" size={28} color="primary" />
-            <Text style={[styles.quickBtnText, { color: theme.colors.onSurfaceVariant }]}>
-              导出数据
-            </Text>
-          </View>
-        </AppCard>
-      </View>
     </ScrollView>
 
     {/* ── Fullscreen Chart Modal ── */}
@@ -729,7 +654,7 @@ const styles = StyleSheet.create({
   // Hero card
   heroCard: {
     margin: spacing.md,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     padding: spacing.lg,
     shadowColor: '#000',
     shadowOpacity: 0.12,

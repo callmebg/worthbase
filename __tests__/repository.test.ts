@@ -252,7 +252,7 @@ describe('Asset Repository', () => {
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
     await AssetRepository.create({
-      name: 'Retired Asset', category: AssetCategory.FURNITURE,
+      name: 'Retired Asset', category: AssetCategory.HOME,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
@@ -277,7 +277,7 @@ describe('Asset Repository', () => {
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
     await AssetRepository.create({
-      name: 'Sofa', category: AssetCategory.FURNITURE,
+      name: 'Sofa', category: AssetCategory.HOME,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,

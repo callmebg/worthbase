@@ -32,15 +32,10 @@ const RECOMMENDATION_TABLE: Record<AssetCategory, AmortizationRecommendation> = 
     defaultLifespanMonths: 60,
     hint: '车辆有残值，建议考虑残值后分摊',
   },
-  [AssetCategory.FURNITURE]: {
+  [AssetCategory.HOME]: {
     type: AmortizationType.EXPECTED_LIFESPAN,
-    defaultLifespanMonths: 120,
-    hint: '家具耐用，按预期寿命均摊',
-  },
-  [AssetCategory.APPLIANCE]: {
-    type: AmortizationType.EXPECTED_LIFESPAN,
-    defaultLifespanMonths: 96,
-    hint: '家电寿命较长',
+    defaultLifespanMonths: 108,
+    hint: '家居用品耐用，按预期寿命均摊',
   },
   [AssetCategory.LUXURY]: {
     type: AmortizationType.NO_AMORTIZATION,

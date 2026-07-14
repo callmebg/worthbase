@@ -69,6 +69,8 @@ Holding cost = Depreciation + Recurring expenses (active items for current month
 <p align="center">
   <img src="./docs/screenshots/calc.jpg" alt="Holding cost calculation" width="200">
   <img src="./docs/screenshots/calc2.jpg" alt="Holding cost details" width="200">
+  <img src="./docs/screenshots/calc3.jpg" alt="Holding cost details" width="200">
+  <img src="./docs/screenshots/calc4.jpg" alt="Holding cost details" width="200">
 </p>
 
 ### Data Security

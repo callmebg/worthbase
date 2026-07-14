@@ -9,11 +9,13 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   StyleSheet,
   Alert,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { useAccountStore } from '@/stores/account-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { AccountType, AccountTypeLabels } from '@/types/enums';
 import { ACCOUNT_TYPE_ICONS } from '@/theme/icons';
@@ -26,7 +28,8 @@ import { AppChip } from '@/components/ui/Chip';
 import { AppBottomSheet, BottomSheetTextInput } from '@/components/ui/BottomSheet';
 import type { AppBottomSheetRef } from '@/components/ui/BottomSheet';
 import { Icon } from '@/components/ui/Icon';
-import { isValidPositiveNumber } from '@/utils/validation';
+import { isValidPositiveNumber, isValidNumber } from '@/utils/validation';
+import { LIABILITY_ACCOUNT_TYPES } from '@/types/enums';
 import { useToast } from '@/hooks/useToast';
 import { spacing } from '@/theme/tokens';
 
@@ -34,6 +37,7 @@ export default function AccountsScreen() {
   const theme = useAppTheme();
   const toast = useToast();
   const { accounts, balances, loadAccounts, addAccount, editAccount, updateBalance, deleteAccount, hardDelete } = useAccountStore();
+  const { currencySymbol } = useSettingsStore();
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [updateTarget, setUpdateTarget] = useState<Account | null>(null);
   const [editTarget, setEditTarget] = useState<Account | null>(null);
@@ -110,8 +114,8 @@ export default function AccountsScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Total Balance Hero Card */}
       <View style={[styles.totalCard, { backgroundColor: theme.colors.primary }]}>
-        <Text style={[styles.totalLabel, { color: theme.colors.onPrimary }]}>流动资产总计</Text>
-        <Text style={[styles.totalAmount, { color: theme.colors.onPrimary }]}>{formatCurrency(totalBalance)}</Text>
+        <Text style={[styles.totalLabel, { color: theme.colors.onPrimary }]}>账户余额总计</Text>
+        <Text style={[styles.totalAmount, { color: theme.colors.onPrimary }]}>{formatCurrency(totalBalance, currencySymbol)}</Text>
         <Text style={[styles.accountCount, { color: theme.colors.onPrimary }]}>{accounts.length} 个账户</Text>
       </View>
 
@@ -142,7 +146,7 @@ export default function AccountsScreen() {
               </View>
             </View>
             <Text style={[styles.cardBalance, { color: theme.colors.onSurface }]}>
-              {formatCurrency(balances.get(item.id) ?? 0)}
+              {formatCurrency(balances.get(item.id) ?? 0, currencySymbol)}
             </Text>
             <AppButton
               title="更新余额"
@@ -242,7 +246,7 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
   const types = Object.values(AccountType);
 
   const balanceError =
-    initialBalance && !isValidPositiveNumber(initialBalance) ? '请输入有效金额' : '';
+    initialBalance && !isValidNumber(initialBalance) ? '请输入有效金额' : '';
 
   return (
     <AppBottomSheet visible={visible} onClose={onClose} snapPoints={['70%', '90%']}>
@@ -266,11 +270,11 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
         ))}
       </View>
       <AppTextInput bottomSheet
-        label="初始余额（可选）"
+        label={LIABILITY_ACCOUNT_TYPES.has(type) ? '初始欠款（可选）' : '初始余额（可选）'}
         value={initialBalance}
         onChangeText={setInitialBalance}
-        placeholder="0.00"
-        keyboardType="decimal-pad"
+        placeholder={LIABILITY_ACCOUNT_TYPES.has(type) ? '-5000.00' : '0.00'}
+        keyboardType="numeric"
         error={balanceError}
       />
       <View style={styles.sheetActions}>
@@ -280,13 +284,15 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
           variant="primary"
           disabled={!name.trim()}
           onPress={() => {
-            onAdd(
-              name.trim(),
-              type,
-              initialBalance && isValidPositiveNumber(initialBalance)
-                ? parseFloat(initialBalance)
-                : undefined,
-            );
+            let balance: number | undefined;
+            if (initialBalance && isValidNumber(initialBalance)) {
+              balance = parseFloat(initialBalance);
+              // Auto-negate for liability accounts (user enters positive debt amount)
+              if (LIABILITY_ACCOUNT_TYPES.has(type) && balance > 0) {
+                balance = -balance;
+              }
+            }
+            onAdd(name.trim(), type, balance);
             setName('');
             setInitialBalance('');
           }}
@@ -319,13 +325,14 @@ function UpdateBalanceSheet({ account, currentBalance, onClose, onUpdate }: {
         {account.name}
       </Text>
       <Text style={[styles.currentBalance, { color: theme.colors.tertiary }]}>
-        当前余额: {formatCurrency(currentBalance)}
+        当前余额: {formatCurrency(currentBalance, currencySymbol)}
       </Text>
       <AppTextInput bottomSheet
         label="输入新余额"
         value={balance}
         onChangeText={setBalance}
-        keyboardType="decimal-pad"
+        keyboardType="numeric"
+        placeholder="支持负数，如 -5000"
         autoFocus
       />
       <View style={styles.sheetActions}>
@@ -371,23 +378,21 @@ function BalanceHistorySheet({ visible, onClose }: {
   return (
     <AppBottomSheet visible={visible} onClose={onClose} snapPoints={['60%', '85%']}>
       <Text style={[styles.sheetTitle, { color: theme.colors.onSurface }]}>余额更新历史</Text>
-      <FlatList
-        data={dates}
-        keyExtractor={item => item.date}
-        renderItem={({ item }) => {
+      <ScrollView style={{ maxHeight: 300 }}>
+        {dates.map((item) => {
           const total = item.balances.reduce((s, b) => s + b.balance, 0);
           return (
-            <View style={[styles.historyRow, { borderBottomColor: theme.colors.outline }]}>
+            <View key={item.date} style={[styles.historyRow, { borderBottomColor: theme.colors.outline }]}>
               <Text style={[styles.historyDate, { color: theme.colors.onSurfaceVariant }]}>
                 {formatDate(item.date)}
               </Text>
               <Text style={[styles.historyTotal, { color: theme.colors.onSurface }]}>
-                {formatCurrency(total)}
+                {formatCurrency(total, currencySymbol)}
               </Text>
             </View>
           );
-        }}
-      />
+        })}
+      </ScrollView>
       <AppButton title="关闭" variant="primary" onPress={onClose} style={{ marginTop: spacing.md }} />
     </AppBottomSheet>
   );

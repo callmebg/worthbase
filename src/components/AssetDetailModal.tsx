@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { useAssetStore } from '@/stores/asset-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
 import { SettlementCalculator } from '@/engine/SettlementCalculator';
 import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
@@ -30,7 +31,6 @@ import {
   AssetStatusLabels,
   AssetStatusColors,
   AssetCategoryLabels,
-  AmortizationTypeLabels,
 } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
 import type { Asset, HoldingCostResult, RecurringExpense, MaintenanceRecord, SettlementResult } from '@/types/models';
@@ -47,6 +47,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   onEdit?: (asset: Asset) => void;
 }) {
   const theme = useAppTheme();
+  const { currencySymbol } = useSettingsStore();
   const { markRetired, recordSale, updateValuation, loadAssets, restoreAsset } = useAssetStore();
   const [holdingCost, setHoldingCost] = useState<HoldingCostResult | null>(null);
   const [recurring, setRecurring] = useState<RecurringExpense[]>([]);
@@ -175,10 +176,17 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
         <Icon name={iconName} size={32} color="primary" />
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={[styles.assetName, { color: theme.colors.onSurface }]}>{asset.name}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: AssetStatusColors[asset.status] + '20' }]}>
-            <Text style={[styles.statusText, { color: AssetStatusColors[asset.status] }]}>
-              {AssetStatusLabels[asset.status]}
-            </Text>
+          <View style={styles.headerMeta}>
+            <View style={[styles.statusBadge, { backgroundColor: AssetStatusColors[asset.status] + '20' }]}>
+              <Text style={[styles.statusText, { color: AssetStatusColors[asset.status] }]}>
+                {AssetStatusLabels[asset.status]}
+              </Text>
+            </View>
+            {isActive && holdingCost && holdingCost.monthlyTotal > 0 ? (
+              <Text style={[styles.headerCost, { color: theme.colors.primary }]}>
+                {formatCurrency(holdingCost.monthlyTotal, currencySymbol)}/月 · {formatCurrency(holdingCost.dailyAverage, currencySymbol)}/天
+              </Text>
+            ) : null}
           </View>
         </View>
       </View>
@@ -188,7 +196,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
         {isActive && holdingCost ? (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>持有成本</Text>
-            <HoldingCostBreakdown result={holdingCost} />
+            <HoldingCostBreakdown result={holdingCost} currencySymbol={currencySymbol} />
           </View>
         ) : null}
 
@@ -197,19 +205,19 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>卖出结算</Text>
             <View style={[styles.settlementCard, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <SettRow label="购入价" value={formatCurrency(settlement.purchasePrice)} theme={theme} />
-              <SettRow label="卖价" value={formatCurrency(settlement.sellPrice)} theme={theme} />
+              <SettRow label="购入价" value={formatCurrency(settlement.purchasePrice, currencySymbol)} theme={theme} />
+              <SettRow label="卖价" value={formatCurrency(settlement.sellPrice, currencySymbol)} theme={theme} />
               <SettRow
                 label={settlement.depreciation > 0 ? '贬值' : '升值'}
-                value={formatCurrency(Math.abs(settlement.depreciation))}
+                value={formatCurrency(Math.abs(settlement.depreciation), currencySymbol)}
                 theme={theme}
                 valueColor={settlement.depreciation > 0 ? theme.colors.error : theme.colors.success}
               />
-              <SettRow label="累计持有成本" value={formatCurrency(settlement.totalHoldingCost)} theme={theme} />
+              <SettRow label="累计持有成本" value={formatCurrency(settlement.totalHoldingCost, currencySymbol)} theme={theme} />
               <View style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-              <SettRow label="真实净支出" value={formatCurrency(settlement.netExpenditure)} theme={theme} bold valueColor={theme.colors.error} />
+              <SettRow label="真实净支出" value={formatCurrency(settlement.netExpenditure, currencySymbol)} theme={theme} bold valueColor={theme.colors.error} />
               <SettRow label="持有天数" value={`${settlement.ownershipDays} 天`} theme={theme} />
-              <SettRow label="日均成本" value={`${formatCurrency(settlement.dailyAverageCost)}/天`} theme={theme} />
+              <SettRow label="日均成本" value={`${formatCurrency(settlement.dailyAverageCost, currencySymbol)}/天`} theme={theme} />
             </View>
           </View>
         ) : null}
@@ -220,12 +228,11 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
           <View style={[styles.infoCard, { backgroundColor: theme.colors.surfaceVariant }]}>
             <InfoRow label="分类" value={AssetCategoryLabels[asset.category]} theme={theme} />
             <InfoRow label="购入日期" value={formatDate(asset.purchaseDate)} theme={theme} />
-            <InfoRow label="购入价格" value={formatCurrency(asset.purchasePrice)} theme={theme} />
+            <InfoRow label="购入价格" value={formatCurrency(asset.purchasePrice, currencySymbol)} theme={theme} />
             {asset.weightGrams ? <InfoRow label="克数" value={`${asset.weightGrams} g`} theme={theme} /> : null}
             <InfoRow label="已持有" value={formatDuration(getMonthsHeld(asset.purchaseDate))} theme={theme} />
-            <InfoRow label="分摊方式" value={AmortizationTypeLabels[asset.amortizationType]} theme={theme} />
-            {asset.expectedLifespanMonths ? <InfoRow label="预期寿命" value={`${asset.expectedLifespanMonths} 个月`} theme={theme} /> : null}
-            {asset.residualValue ? <InfoRow label="预估残值" value={formatCurrency(asset.residualValue)} theme={theme} /> : null}
+            <InfoRow label="折旧方式" value={describeAmortization(asset)} theme={theme} />
+            {asset.residualValue ? <InfoRow label="预估残值" value={formatCurrency(asset.residualValue, currencySymbol)} theme={theme} /> : null}
           </View>
         </View>
 
@@ -267,7 +274,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
           {recurring.length > 0 ? recurring.map(re => (
             <View key={re.id} style={[styles.subRow, { borderBottomColor: theme.colors.outline }]}>
               <Text style={[styles.subName, { color: theme.colors.onSurface }]}>{re.name}</Text>
-              <Text style={[styles.subAmount, { color: theme.colors.onSurface }]}>{formatCurrency(re.amount)}/月</Text>
+              <Text style={[styles.subAmount, { color: theme.colors.onSurface }]}>{formatCurrency(re.amount, currencySymbol)}/月</Text>
               <Text style={[styles.subPeriod, { color: theme.colors.tertiary }]}>{re.effectiveFrom.substring(0, 7)} ~ {re.effectiveTo ? re.effectiveTo.substring(0, 7) : '至今'}</Text>
               {isActive && <AppButton title="✕" variant="text" compact onPress={() => handleDeleteRecurring(re)} />}
             </View>
@@ -295,7 +302,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
           {maintenance.length > 0 ? maintenance.map(m => (
             <View key={m.id} style={[styles.subRow, { borderBottomColor: theme.colors.outline }]}>
               <Text style={[styles.subName, { color: theme.colors.onSurface }]}>{m.name}</Text>
-              <Text style={[styles.subAmount, { color: theme.colors.onSurface }]}>{formatCurrency(m.amount)}</Text>
+              <Text style={[styles.subAmount, { color: theme.colors.onSurface }]}>{formatCurrency(m.amount, currencySymbol)}</Text>
               <Text style={[styles.subPeriod, { color: theme.colors.tertiary }]}>{formatDate(m.date)}{m.amortize ? ' (分摊)' : ''}</Text>
               {isActive && <AppButton title="✕" variant="text" compact onPress={() => handleDeleteMaintenance(m)} />}
             </View>
@@ -369,6 +376,30 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   );
 }
 
+/** Human-readable amortization description — hides technical strategy names */
+function describeAmortization(asset: Asset): string {
+  switch (asset.amortizationType) {
+    case 'simple_linear':
+      return '按已持有时间递减';
+    case 'expected_lifespan': {
+      const months = asset.expectedLifespanMonths;
+      if (!months) return '按预期寿命均摊';
+      const years = months / 12;
+      return `用 ${years % 1 === 0 ? years : years.toFixed(1)} 年均摊`;
+    }
+    case 'residual_value': {
+      const months = asset.expectedLifespanMonths;
+      if (!months) return '考虑残值后均摊';
+      const years = months / 12;
+      return `用 ${years % 1 === 0 ? years : years.toFixed(1)} 年均摊（含残值）`;
+    }
+    case 'no_amortization':
+      return '不计算折旧';
+    default:
+      return '未知';
+  }
+}
+
 function SettRow({ label, value, theme, bold, valueColor }: { label: string; value: string; theme: any; bold?: boolean; valueColor?: string }) {
   return (
     <View style={styles.settRow}>
@@ -390,7 +421,9 @@ function InfoRow({ label, value, theme }: { label: string; value: string; theme:
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   assetName: { fontSize: 20, fontWeight: '700' },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 4, alignSelf: 'flex-start' },
+  headerMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
+  headerCost: { fontSize: 13, fontWeight: '600' },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, alignSelf: 'flex-start' },
   statusText: { fontSize: 11, fontWeight: '500' },
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },

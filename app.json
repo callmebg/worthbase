@@ -2,14 +2,14 @@
   "expo": {
     "name": "家底 WorthBase",
     "slug": "worthbase",
-    "version": "1.1.1",
+    "version": "1.2.1",
     "scheme": "worthbase",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#6C5CE7"
     },
@@ -37,7 +37,8 @@
       "expo-local-authentication",
       "expo-file-system",
       "expo-screen-orientation",
-      "./plugins/with-china-mirror.js"
+      "./plugins/with-china-mirror.js",
+      "./plugins/with-android-optimize.js"
     ],
     "extra": {
       "eas": {

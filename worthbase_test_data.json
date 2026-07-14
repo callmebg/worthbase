@@ -55,6 +55,24 @@
       "sortOrder": 5,
       "createdAt": "2025-03-01T00:00:00.000Z",
       "updatedAt": "2026-07-10T00:00:00.000Z"
+    },
+    {
+      "id": "acc-007",
+      "name": "招行信用卡",
+      "type": "credit_card",
+      "icon": null,
+      "sortOrder": 6,
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2026-07-10T00:00:00.000Z"
+    },
+    {
+      "id": "acc-008",
+      "name": "房贷（公积金）",
+      "type": "loan",
+      "icon": null,
+      "sortOrder": 7,
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2026-07-10T00:00:00.000Z"
     }
   ],
   "balanceSnapshots": [
@@ -105,7 +123,9 @@
     {"accountId": "acc-003", "balance": 68500, "snapshotDate": "2026-07-10"},
     {"accountId": "acc-004", "balance": 48000, "snapshotDate": "2026-07-10"},
     {"accountId": "acc-005", "balance": 2800, "snapshotDate": "2026-07-10"},
-    {"accountId": "acc-006", "balance": 58000, "snapshotDate": "2026-07-10"}
+    {"accountId": "acc-006", "balance": 58000, "snapshotDate": "2026-07-10"},
+    {"accountId": "acc-007", "balance": -8500, "snapshotDate": "2026-07-10"},
+    {"accountId": "acc-008", "balance": -385000, "snapshotDate": "2026-07-10"}
   ],
   "assets": [
     {
@@ -183,7 +203,7 @@
     {
       "id": "asset-005",
       "name": "宜家 MALM 书桌",
-      "category": "furniture",
+      "category": "home",
       "purchaseDate": "2024-01-20",
       "purchasePrice": 1299,
       "amortizationType": "expected_lifespan",
@@ -201,7 +221,7 @@
     {
       "id": "asset-006",
       "name": "戴森 V15 吸尘器",
-      "category": "appliance",
+      "category": "home",
       "purchaseDate": "2024-06-18",
       "purchasePrice": 4990,
       "amortizationType": "expected_lifespan",
@@ -269,6 +289,25 @@
       "imagePath": null,
       "createdAt": "2022-01-10T00:00:00.000Z",
       "updatedAt": "2024-03-15T00:00:00.000Z"
+    },
+    {
+      "id": "asset-011",
+      "name": "周大福金条 50g",
+      "category": "precious_metal",
+      "purchaseDate": "2025-02-14",
+      "purchasePrice": 32500,
+      "amortizationType": "no_amortization",
+      "expectedLifespanMonths": null,
+      "residualValue": null,
+      "valuationTracking": true,
+      "currentValuation": 35000,
+      "status": "active",
+      "sellDate": null,
+      "sellPrice": null,
+      "weightGrams": 50,
+      "imagePath": null,
+      "createdAt": "2025-02-14T00:00:00.000Z",
+      "updatedAt": "2026-07-01T00:00:00.000Z"
     },
     {
       "id": "asset-010",

@@ -9,6 +9,12 @@ export function isValidPositiveNumber(value: string): boolean {
   return !isNaN(num) && num > 0;
 }
 
+/** Validate that a string is a valid number (including negative, e.g. for liabilities) */
+export function isValidNumber(value: string): boolean {
+  const num = parseFloat(value);
+  return !isNaN(num) && isFinite(num);
+}
+
 /** Validate that a string is a valid non-negative number (including zero) */
 export function isValidNonNegativeNumber(value: string): boolean {
   const num = parseFloat(value);

@@ -284,7 +284,7 @@ describe('ImportService', () => {
       ],
       assets: [
         {
-          name: 'New Asset', category: AssetCategory.FURNITURE,
+          name: 'New Asset', category: AssetCategory.HOME,
           purchaseDate: '2025-03-01', purchasePrice: 5000,
           amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
           residualValue: null, valuationTracking: false, currentValuation: null,

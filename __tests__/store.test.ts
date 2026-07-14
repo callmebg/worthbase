@@ -184,6 +184,40 @@ describe('Account Store', () => {
     useAccountStore.setState({ balances: new Map() });
     expect(useAccountStore.getState().getTotalBalance()).toBe(0);
   });
+
+  test('addAccount: creates account with negative initial balance (liability)', async () => {
+    const newAccount = makeAccount({ id: 'acc-cc', name: '招行信用卡', type: AccountType.CREDIT_CARD });
+    (AccountRepository.create as jest.Mock).mockResolvedValue(newAccount);
+    (BalanceSnapshotRepository.create as jest.Mock).mockResolvedValue({});
+
+    await useAccountStore.getState().addAccount('招行信用卡', AccountType.CREDIT_CARD, null, -5000);
+
+    expect(BalanceSnapshotRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: 'acc-cc',
+      balance: -5000,
+    }));
+    expect(useAccountStore.getState().balances.get('acc-cc')).toBe(-5000);
+  });
+
+  test('getTotalBalance: handles mixed positive and negative balances', () => {
+    useAccountStore.setState({
+      balances: new Map([['acc-1', 10000], ['acc-2', -5000], ['acc-3', 3000]]),
+    });
+    expect(useAccountStore.getState().getTotalBalance()).toBe(8000);
+  });
+
+  test('updateBalance: accepts negative balance', async () => {
+    useAccountStore.setState({ balances: new Map([['acc-1', 1000]]) });
+    (BalanceSnapshotRepository.create as jest.Mock).mockResolvedValue({});
+
+    await useAccountStore.getState().updateBalance('acc-1', -3000);
+
+    expect(BalanceSnapshotRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      accountId: 'acc-1',
+      balance: -3000,
+    }));
+    expect(useAccountStore.getState().balances.get('acc-1')).toBe(-3000);
+  });
 });
 
 // ─── Asset Store Tests ───

@@ -19,6 +19,7 @@ import { AmortizationType, AssetStatus, AssetCategory } from '@/types/enums';
 import type { Asset } from '@/types/models';
 import { ProjectionCalculator } from '@/engine/ProjectionCalculator';
 import { NetWorthCalculator } from '@/engine/NetWorthCalculator';
+import { recommendAmortization } from '@/engine/AmortizationRecommender';
 
 // ─── Helper: create a test asset ───
 function makeAsset(overrides: Partial<Asset> = {}): Asset {
@@ -424,5 +425,45 @@ describe('NetWorthCalculator - negative progress', () => {
   test('returns 0 when goal is null or <= 0', () => {
     expect(NetWorthCalculator.calculateProgress(-5000, null).percentage).toBe(0);
     expect(NetWorthCalculator.calculateProgress(-5000, 0).percentage).toBe(0);
+  });
+});
+
+// ─── AmortizationRecommender tests ───
+describe('AmortizationRecommender', () => {
+  test('HOME category recommends EXPECTED_LIFESPAN with 108 months', () => {
+    const rec = recommendAmortization(AssetCategory.HOME);
+    expect(rec.type).toBe(AmortizationType.EXPECTED_LIFESPAN);
+    expect(rec.defaultLifespanMonths).toBe(108);
+  });
+
+  test('ELECTRONICS recommends SIMPLE_LINEAR', () => {
+    const rec = recommendAmortization(AssetCategory.ELECTRONICS);
+    expect(rec.type).toBe(AmortizationType.SIMPLE_LINEAR);
+    expect(rec.defaultLifespanMonths).toBeUndefined();
+  });
+
+  test('VEHICLE recommends RESIDUAL_VALUE with 60 months', () => {
+    const rec = recommendAmortization(AssetCategory.VEHICLE);
+    expect(rec.type).toBe(AmortizationType.RESIDUAL_VALUE);
+    expect(rec.defaultLifespanMonths).toBe(60);
+  });
+
+  test('LUXURY recommends NO_AMORTIZATION', () => {
+    const rec = recommendAmortization(AssetCategory.LUXURY);
+    expect(rec.type).toBe(AmortizationType.NO_AMORTIZATION);
+  });
+
+  test('REAL_ESTATE recommends EXPECTED_LIFESPAN with 360 months', () => {
+    const rec = recommendAmortization(AssetCategory.REAL_ESTATE);
+    expect(rec.type).toBe(AmortizationType.EXPECTED_LIFESPAN);
+    expect(rec.defaultLifespanMonths).toBe(360);
+  });
+
+  test('every category has a recommendation with a hint', () => {
+    for (const cat of Object.values(AssetCategory)) {
+      const rec = recommendAmortization(cat);
+      expect(rec.type).toBeDefined();
+      expect(rec.hint.length).toBeGreaterThan(0);
+    }
   });
 });

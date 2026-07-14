@@ -17,7 +17,7 @@ import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
 import { MaintenanceRepository } from '@/db/maintenance-repository';
 import {
   AssetCategory, AssetCategoryLabels,
-  AmortizationType, AmortizationTypeLabels, AmortizationTypeDescriptions,
+  AmortizationType,
 } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
 import type { Asset, RecurringExpense, MaintenanceRecord } from '@/types/models';
@@ -31,8 +31,8 @@ import { Icon } from '@/components/ui/Icon';
 import { radius } from '@/theme/tokens';
 import { recommendAmortization } from '@/engine/AmortizationRecommender';
 
-type DraftRecurring = Omit<RecurringExpense, 'id' | 'createdAt' | 'assetId'>;
-type DraftMaintenance = Omit<MaintenanceRecord, 'id' | 'createdAt' | 'assetId'>;
+type DraftRecurring = Omit<RecurringExpense, 'createdAt' | 'assetId'> & { id?: string };
+type DraftMaintenance = Omit<MaintenanceRecord, 'createdAt' | 'assetId'> & { id?: string };
 
 /** Preset lifespan options for quick selection */
 const LIFESPAN_PRESETS = [
@@ -53,6 +53,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const theme = useAppTheme();
   const { addAsset, editAsset: updateAsset } = useAssetStore();
   const [step, setStep] = useState(1);
+  const [quickMode, setQuickMode] = useState(true);
 
   // Step 1 fields
   const [name, setName] = useState('');
@@ -128,7 +129,8 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   };
 
   const resetForm = () => {
-    setStep(1); setName(''); setCategory(AssetCategory.ELECTRONICS);
+    setStep(1); setQuickMode(true);
+    setName(''); setCategory(AssetCategory.ELECTRONICS);
     setPurchaseDate(getCurrentDate()); setPurchasePrice(''); setWeightGrams('');
     setAmortizationType(AmortizationType.SIMPLE_LINEAR);
     setExpectedLifespan(''); setResidualValue('');
@@ -145,6 +147,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   useEffect(() => {
     if (editAsset) {
       setStep(1);
+      setQuickMode(false); // Edit always uses full mode
       setName(editAsset.name);
       setCategory(editAsset.category);
       setPurchaseDate(editAsset.purchaseDate);
@@ -171,6 +174,20 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       setResidualValue(editAsset.residualValue ? String(editAsset.residualValue) : '');
       setValuationTracking(editAsset.valuationTracking);
       setCurrentValuation(editAsset.currentValuation ? String(editAsset.currentValuation) : '');
+
+      // Load existing recurring expenses and maintenance records with their IDs
+      (async () => {
+        const existingRecurring = await RecurringExpenseRepository.getByAsset(editAsset.id);
+        setRecurringExpenses(existingRecurring.map(r => ({
+          id: r.id, name: r.name, amount: r.amount,
+          effectiveFrom: r.effectiveFrom, effectiveTo: r.effectiveTo,
+        })));
+        const existingMaintenance = await MaintenanceRepository.getByAsset(editAsset.id);
+        setMaintenanceRecords(existingMaintenance.map(m => ({
+          id: m.id, name: m.name, amount: m.amount,
+          date: m.date, amortize: m.amortize,
+        })));
+      })();
     }
   }, [editAsset, visible]);
 
@@ -224,30 +241,101 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       if (editAsset) {
         await updateAsset(editAsset.id, assetData);
         savedAsset = { ...editAsset, ...assetData };
+
+        // Diff-based update for recurring expenses
         const oldRecurring = await RecurringExpenseRepository.getByAsset(editAsset.id);
+        const draftRecurringIds = new Set(recurringExpenses.filter(r => r.id).map(r => r.id!));
+        // Delete removed
+        for (const old of oldRecurring) {
+          if (!draftRecurringIds.has(old.id)) {
+            await RecurringExpenseRepository.delete(old.id);
+          }
+        }
+        // Insert new or update existing
+        for (const re of recurringExpenses) {
+          if (re.id && oldRecurring.some(o => o.id === re.id)) {
+            await RecurringExpenseRepository.update(re.id, {
+              name: re.name, amount: re.amount,
+              effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo,
+            });
+          } else {
+            await RecurringExpenseRepository.create({
+              assetId: savedAsset.id, name: re.name, amount: re.amount,
+              effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo,
+            });
+          }
+        }
+
+        // Diff-based update for maintenance records
         const oldMaintenance = await MaintenanceRepository.getByAsset(editAsset.id);
-        await Promise.all([
-          ...oldRecurring.map(r => RecurringExpenseRepository.delete(r.id)),
-          ...oldMaintenance.map(m => MaintenanceRepository.delete(m.id)),
-        ]);
+        const draftMaintenanceIds = new Set(maintenanceRecords.filter(m => m.id).map(m => m.id!));
+        // Delete removed
+        for (const old of oldMaintenance) {
+          if (!draftMaintenanceIds.has(old.id)) {
+            await MaintenanceRepository.delete(old.id);
+          }
+        }
+        // Insert new or update existing
+        for (const m of maintenanceRecords) {
+          if (m.id && oldMaintenance.some(o => o.id === m.id)) {
+            await MaintenanceRepository.update(m.id, {
+              name: m.name, amount: m.amount,
+              date: m.date, amortize: m.amortize,
+            });
+          } else {
+            await MaintenanceRepository.create({
+              assetId: savedAsset.id, name: m.name, amount: m.amount,
+              date: m.date, amortize: m.amortize,
+            });
+          }
+        }
       } else {
         savedAsset = await addAsset(assetData);
+
+        for (const re of recurringExpenses) {
+          await RecurringExpenseRepository.create({
+            assetId: savedAsset.id, name: re.name, amount: re.amount,
+            effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo,
+          });
+        }
+
+        for (const m of maintenanceRecords) {
+          await MaintenanceRepository.create({
+            assetId: savedAsset.id, name: m.name, amount: m.amount,
+            date: m.date, amortize: m.amortize,
+          });
+        }
       }
 
-      for (const re of recurringExpenses) {
-        await RecurringExpenseRepository.create({
-          assetId: savedAsset.id, name: re.name, amount: re.amount,
-          effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo,
-        });
-      }
+      resetForm();
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      Alert.alert('保存失败', (err as Error).message);
+    }
+  };
 
-      for (const m of maintenanceRecords) {
-        await MaintenanceRepository.create({
-          assetId: savedAsset.id, name: m.name, amount: m.amount,
-          date: m.date, amortize: m.amortize,
-        });
-      }
-
+  /** Quick-mode save: uses recommender defaults, skips Step 2 & 3 */
+  const handleQuickSave = async () => {
+    if (!canProceedStep1) return;
+    try {
+      const rec = recommendAmortization(category);
+      const assetData = {
+        name: name.trim(),
+        category,
+        purchaseDate,
+        purchasePrice: parseFloat(purchasePrice) || 0,
+        amortizationType: rec.type,
+        expectedLifespanMonths: rec.defaultLifespanMonths ?? null,
+        residualValue: null,
+        valuationTracking: false,
+        currentValuation: null,
+        weightGrams: category === AssetCategory.PRECIOUS_METAL && weightGrams.trim() ? parseFloat(weightGrams) : null,
+        imagePath: null,
+        sellDate: null,
+        sellPrice: null,
+      };
+      await addAsset(assetData);
       resetForm();
       onSaved?.();
       onClose();
@@ -260,24 +348,79 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const amortTypes = Object.values(AmortizationType);
 
   return (
-    <AppBottomSheet visible={visible} onClose={() => { resetForm(); onClose(); }} snapPoints={['80%', '95%']}>
+    <AppBottomSheet visible={visible} onClose={() => { resetForm(); onClose(); }} snapPoints={quickMode && !editAsset ? ['55%', '80%'] : ['90%', '98%']}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: theme.colors.onSurface }]}>
           {editAsset ? '编辑资产' : '添加资产'}
         </Text>
-        <Text style={[styles.stepIndicator, { color: theme.colors.tertiary }]}>步骤 {step}/3</Text>
+        {!editAsset && quickMode ? null : (
+          <Text style={[styles.stepIndicator, { color: theme.colors.tertiary }]}>步骤 {step}/3</Text>
+        )}
       </View>
 
-      {/* Step indicator bar */}
-      <View style={styles.stepBar}>
-        {[1, 2, 3].map(s => (
-          <View key={s} style={[styles.stepDot, { backgroundColor: s <= step ? theme.colors.primary : theme.colors.outline }]} />
-        ))}
-      </View>
+      {/* Step indicator bar (full mode only) */}
+      {(!quickMode || editAsset) && (
+        <View style={styles.stepBar}>
+          {[1, 2, 3].map(s => (
+            <View key={s} style={[styles.stepDot, { backgroundColor: s <= step ? theme.colors.primary : theme.colors.outline }]} />
+          ))}
+        </View>
+      )}
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {step === 1 && (
+        {/* ── Quick Mode: single-screen add ── */}
+        {quickMode && !editAsset && (
+          <>
+            <AppTextInput bottomSheet
+              label="资产名称"
+              value={name}
+              onChangeText={setName}
+              placeholder="如：iPhone 15 Pro"
+              autoFocus
+            />
+
+            <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>分类</Text>
+            <View style={styles.grid}>
+              {categories.map(cat => (
+                <AppChip
+                  key={cat}
+                  label={AssetCategoryLabels[cat]}
+                  selected={category === cat}
+                  onPress={() => handleCategoryChange(cat)}
+                  icon={ASSET_CATEGORY_ICONS[cat]}
+                />
+              ))}
+            </View>
+
+            <AppTextInput bottomSheet
+              label="购入价格"
+              value={purchasePrice}
+              onChangeText={setPurchasePrice}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              error={!priceValid ? '价格必须大于 0' : undefined}
+            />
+
+            <DatePickerField label="购入日期" value={purchaseDate} onChange={setPurchaseDate} />
+            {!dateValid && purchaseDate.length > 0 ? (
+              <Text style={[styles.errorHint, { color: theme.colors.error }]}>日期格式无效</Text>
+            ) : null}
+
+            {category === AssetCategory.PRECIOUS_METAL && (
+              <AppTextInput bottomSheet
+                label="克数"
+                value={weightGrams}
+                onChangeText={setWeightGrams}
+                placeholder="如：50"
+                keyboardType="decimal-pad"
+              />
+            )}
+          </>
+        )}
+
+        {/* ── Full Mode: 3-step form ── */}
+        {(!quickMode || editAsset) && step === 1 && (
           <>
             <AppTextInput bottomSheet
               label="资产名称"
@@ -325,104 +468,85 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
           </>
         )}
 
-        {step === 2 && (
+        {(!quickMode || editAsset) && step === 2 && (
           <>
-            <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>分摊方式</Text>
-            {recommendation.hint ? (
-              <Text style={[styles.hintText, { color: theme.colors.tertiary }]}>{recommendation.hint}</Text>
-            ) : null}
-            {amortTypes.map(at => (
-              <TouchableOpacity
-                key={at}
-                style={[
-                  styles.radioRow,
-                  { borderBottomColor: theme.colors.outline },
-                  amortizationType === at && { backgroundColor: theme.colors.primaryContainer + '30' },
-                ]}
-                onPress={() => { setUserModifiedAmortizationType(true); setAmortizationType(at); }}
-              >
-                <View
-                  style={[
-                    styles.radio,
-                    { borderColor: amortizationType === at ? theme.colors.primary : theme.colors.outline },
-                  ]}
-                >
-                  {amortizationType === at && <View style={[styles.radioDot, { backgroundColor: theme.colors.primary }]} />}
-                </View>
-                <View style={{ flex: 1, paddingVertical: 12 }}>
-                  <View style={styles.radioLabelRow}>
-                    <Text style={[styles.radioLabel, { color: theme.colors.onSurface }]}>{AmortizationTypeLabels[at]}</Text>
-                    {at === recommendation.type ? (
-                      <View style={[styles.recommendBadge, { backgroundColor: theme.colors.primaryContainer }]}>
-                        <Text style={[styles.recommendBadgeText, { color: theme.colors.onPrimaryContainer }]}>推荐</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={[styles.radioDesc, { color: theme.colors.tertiary }]}>{AmortizationTypeDescriptions[at]}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            <Text style={[styles.label, { color: theme.colors.onSurfaceVariant, fontSize: 16, fontWeight: '600' }]}>
+              这个东西你打算用多久？
+            </Text>
 
-            {(amortizationType === AmortizationType.EXPECTED_LIFESPAN || amortizationType === AmortizationType.RESIDUAL_VALUE) && (
+            <View style={styles.grid}>
+              <AppChip
+                label="一直在用"
+                selected={amortizationType === AmortizationType.SIMPLE_LINEAR}
+                onPress={() => { setUserModifiedAmortizationType(true); setAmortizationType(AmortizationType.SIMPLE_LINEAR); setExpectedLifespan(''); }}
+              />
+              {LIFESPAN_PRESETS.map(preset => (
+                <AppChip
+                  key={preset.label}
+                  label={preset.label}
+                  selected={
+                    (amortizationType === AmortizationType.EXPECTED_LIFESPAN || amortizationType === AmortizationType.RESIDUAL_VALUE)
+                    && expectedLifespan === String(preset.months)
+                  }
+                  onPress={() => {
+                    setUserModifiedAmortizationType(true);
+                    setUserModifiedLifespan(true);
+                    setAmortizationType(category === AssetCategory.VEHICLE ? AmortizationType.RESIDUAL_VALUE : AmortizationType.EXPECTED_LIFESPAN);
+                    setLifespanMode('preset');
+                    setExpectedLifespan(String(preset.months));
+                    setLifespanYears('');
+                  }}
+                />
+              ))}
+              <AppChip
+                label="自定义"
+                selected={lifespanMode === 'custom' && (amortizationType === AmortizationType.EXPECTED_LIFESPAN || amortizationType === AmortizationType.RESIDUAL_VALUE)}
+                onPress={() => {
+                  setUserModifiedAmortizationType(true);
+                  setUserModifiedLifespan(true);
+                  setAmortizationType(category === AssetCategory.VEHICLE ? AmortizationType.RESIDUAL_VALUE : AmortizationType.EXPECTED_LIFESPAN);
+                  setLifespanMode('custom');
+                  if (expectedLifespan && parseInt(expectedLifespan) > 0) {
+                    const months = parseInt(expectedLifespan);
+                    const yrs = months / 12;
+                    setLifespanYears(yrs % 1 === 0 ? String(yrs) : yrs.toFixed(1));
+                  }
+                }}
+              />
+              <AppChip
+                label="不计算折旧"
+                selected={amortizationType === AmortizationType.NO_AMORTIZATION}
+                onPress={() => { setUserModifiedAmortizationType(true); setAmortizationType(AmortizationType.NO_AMORTIZATION); setExpectedLifespan(''); }}
+              />
+            </View>
+
+            {lifespanMode === 'custom' && (amortizationType === AmortizationType.EXPECTED_LIFESPAN || amortizationType === AmortizationType.RESIDUAL_VALUE) ? (
               <View>
-                <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>预期使用年限</Text>
-                <View style={styles.grid}>
-                  {LIFESPAN_PRESETS.map(preset => (
-                    <AppChip
-                      key={preset.label}
-                      label={preset.label}
-                      selected={lifespanMode === 'preset' && expectedLifespan === String(preset.months)}
-                      onPress={() => {
-                        setUserModifiedLifespan(true);
-                        setLifespanMode('preset');
-                        setExpectedLifespan(String(preset.months));
-                        setLifespanYears('');
-                      }}
-                    />
-                  ))}
-                  <AppChip
-                    label="自定义"
-                    selected={lifespanMode === 'custom'}
-                    onPress={() => {
-                      setUserModifiedLifespan(true);
-                      setLifespanMode('custom');
-                      if (expectedLifespan && parseInt(expectedLifespan) > 0) {
-                        const months = parseInt(expectedLifespan);
-                        const yrs = months / 12;
-                        setLifespanYears(yrs % 1 === 0 ? String(yrs) : yrs.toFixed(1));
-                      }
-                    }}
-                  />
-                </View>
-                {lifespanMode === 'custom' ? (
-                  <View>
-                    <AppTextInput bottomSheet
-                      label="预期使用年数"
-                      value={lifespanYears}
-                      onChangeText={(text) => {
-                        setUserModifiedLifespan(true);
-                        setLifespanYears(text);
-                        const years = parseFloat(text);
-                        if (!isNaN(years) && years > 0) {
-                          const months = Math.round(years * 12);
-                          setExpectedLifespan(String(months));
-                        } else if (text.trim() === '') {
-                          setExpectedLifespan('');
-                        }
-                      }}
-                      placeholder="如：30"
-                      keyboardType="decimal-pad"
-                      error={lifespanYearsError}
-                    />
-                    {lifespanYears.trim() && !isNaN(parseFloat(lifespanYears)) && parseFloat(lifespanYears) > 0 && parseFloat(lifespanYears) <= 100 ? (
-                      <Text style={[styles.hintText, { color: theme.colors.tertiary }]}>
-                        = {Math.round(parseFloat(lifespanYears) * 12)} 个月
-                      </Text>
-                    ) : null}
-                  </View>
+                <AppTextInput bottomSheet
+                  label="预期使用年数"
+                  value={lifespanYears}
+                  onChangeText={(text) => {
+                    setUserModifiedLifespan(true);
+                    setLifespanYears(text);
+                    const years = parseFloat(text);
+                    if (!isNaN(years) && years > 0) {
+                      const months = Math.round(years * 12);
+                      setExpectedLifespan(String(months));
+                    } else if (text.trim() === '') {
+                      setExpectedLifespan('');
+                    }
+                  }}
+                  placeholder="如：30"
+                  keyboardType="decimal-pad"
+                  error={lifespanYearsError}
+                />
+                {lifespanYears.trim() && !isNaN(parseFloat(lifespanYears)) && parseFloat(lifespanYears) > 0 && parseFloat(lifespanYears) <= 100 ? (
+                  <Text style={[styles.hintText, { color: theme.colors.tertiary }]}>
+                    = {Math.round(parseFloat(lifespanYears) * 12)} 个月
+                  </Text>
                 ) : null}
               </View>
-            )}
+            ) : null}
 
             {amortizationType === AmortizationType.RESIDUAL_VALUE && (
               <AppTextInput bottomSheet
@@ -455,7 +579,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
           </>
         )}
 
-        {step === 3 && (
+        {(!quickMode || editAsset) && step === 3 && (
           <>
             <Text style={[styles.label, { color: theme.colors.onSurfaceVariant }]}>经常性支出（可选）</Text>
             {recurringExpenses.map((re, i) => (
@@ -499,27 +623,55 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
 
       {/* Footer buttons */}
       <View style={styles.footer}>
-        {step > 1 && (
-          <AppButton title="上一步" variant="text" onPress={() => setStep(step - 1)} style={{ flex: 1 }} />
-        )}
-        {step < 3 ? (
-          <AppButton
-            title="下一步"
-            variant="primary"
-            disabled={step === 1 && !canProceedStep1}
-            onPress={() => setStep(step + 1)}
-            style={{ flex: 1 }}
-          />
+        {quickMode && !editAsset ? (
+          <>
+            <AppButton
+              title="添加"
+              variant="primary"
+              disabled={!canProceedStep1}
+              onPress={handleQuickSave}
+              style={{ flex: 2 }}
+            />
+            <AppButton title="取消" variant="text" onPress={() => { resetForm(); onClose(); }} style={{ flex: 1 }} />
+          </>
         ) : (
-          <AppButton
-            title={editAsset ? '保存修改' : '创建资产'}
-            variant="primary"
-            onPress={handleSave}
-            style={{ flex: 1 }}
-          />
+          <>
+            {step > 1 && (
+              <AppButton title="上一步" variant="text" onPress={() => setStep(step - 1)} style={{ flex: 1 }} />
+            )}
+            {step < 3 ? (
+              <AppButton
+                title="下一步"
+                variant="primary"
+                disabled={step === 1 && !canProceedStep1}
+                onPress={() => setStep(step + 1)}
+                style={{ flex: 1 }}
+              />
+            ) : (
+              <AppButton
+                title={editAsset ? '保存修改' : '创建资产'}
+                variant="primary"
+                onPress={handleSave}
+                style={{ flex: 1 }}
+              />
+            )}
+            <AppButton title="取消" variant="text" onPress={() => { resetForm(); onClose(); }} style={{ flex: 1 }} />
+          </>
         )}
-        <AppButton title="取消" variant="text" onPress={() => { resetForm(); onClose(); }} style={{ flex: 1 }} />
       </View>
+
+      {/* Quick mode: "更多设置" link */}
+      {quickMode && !editAsset && (
+        <TouchableOpacity
+          onPress={() => setQuickMode(false)}
+          style={styles.moreLink}
+          hitSlop={8}
+        >
+          <Text style={[styles.moreLinkText, { color: theme.colors.primary }]}>
+            更多设置（折旧方式、估值追踪、经常性支出…）→
+          </Text>
+        </TouchableOpacity>
+      )}
     </AppBottomSheet>
   );
 }
@@ -549,4 +701,6 @@ const styles = StyleSheet.create({
   inlineAdd: { flexDirection: 'row', marginTop: 4 },
   footer: { flexDirection: 'row', gap: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'transparent' },
   errorHint: { fontSize: 12, marginBottom: 4, marginTop: -4 },
+  moreLink: { alignSelf: 'center', paddingVertical: 10, marginTop: 4 },
+  moreLinkText: { fontSize: 13, fontWeight: '500' },
 });

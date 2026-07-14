@@ -10,8 +10,16 @@ export enum AccountType {
   BANK_CARD = 'bank_card',
   CASH = 'cash',
   FUND = 'fund',
+  CREDIT_CARD = 'credit_card',
+  LOAN = 'loan',
   OTHER = 'other',
 }
+
+/** Account types that represent liabilities (negative balances) */
+export const LIABILITY_ACCOUNT_TYPES: ReadonlySet<AccountType> = new Set([
+  AccountType.CREDIT_CARD,
+  AccountType.LOAN,
+]);
 
 /** Human-readable labels for AccountType */
 export const AccountTypeLabels: Record<AccountType, string> = {
@@ -20,6 +28,8 @@ export const AccountTypeLabels: Record<AccountType, string> = {
   [AccountType.BANK_CARD]: '银行卡',
   [AccountType.CASH]: '现金',
   [AccountType.FUND]: '基金',
+  [AccountType.CREDIT_CARD]: '信用卡',
+  [AccountType.LOAN]: '贷款',
   [AccountType.OTHER]: '其他',
 };
 
@@ -33,7 +43,9 @@ export const AccountTypeIcons: Record<AccountType, string> = {
   [AccountType.BANK_CARD]: '🏦',
   [AccountType.CASH]: '💵',
   [AccountType.FUND]: '📈',
-  [AccountType.OTHER]: '💳',
+  [AccountType.CREDIT_CARD]: '💳',
+  [AccountType.LOAN]: '🏧',
+  [AccountType.OTHER]: '📋',
 };
 
 /** Physical asset categories */
@@ -42,8 +54,7 @@ export enum AssetCategory {
   REAL_ESTATE = 'real_estate',
   ELECTRONICS = 'electronics',
   DIGITAL = 'digital',
-  FURNITURE = 'furniture',
-  APPLIANCE = 'appliance',
+  HOME = 'home',
   LUXURY = 'luxury',
   PRECIOUS_METAL = 'precious_metal',
   OTHER = 'other',
@@ -55,8 +66,7 @@ export const AssetCategoryLabels: Record<AssetCategory, string> = {
   [AssetCategory.REAL_ESTATE]: '房产',
   [AssetCategory.ELECTRONICS]: '电子产品',
   [AssetCategory.DIGITAL]: '数码产品',
-  [AssetCategory.FURNITURE]: '家具',
-  [AssetCategory.APPLIANCE]: '家电',
+  [AssetCategory.HOME]: '家居',
   [AssetCategory.LUXURY]: '奢侈品',
   [AssetCategory.PRECIOUS_METAL]: '贵金属',
   [AssetCategory.OTHER]: '其他',
@@ -71,8 +81,7 @@ export const AssetCategoryIcons: Record<AssetCategory, string> = {
   [AssetCategory.REAL_ESTATE]: '🏠',
   [AssetCategory.ELECTRONICS]: '📱',
   [AssetCategory.DIGITAL]: '💻',
-  [AssetCategory.FURNITURE]: '🪑',
-  [AssetCategory.APPLIANCE]: '🔌',
+  [AssetCategory.HOME]: '🛋️',
   [AssetCategory.LUXURY]: '⌚',
   [AssetCategory.PRECIOUS_METAL]: '💎',
   [AssetCategory.OTHER]: '📦',

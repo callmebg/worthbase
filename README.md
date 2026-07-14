@@ -38,17 +38,18 @@
 ## 功能特性
 
 ### 账户余额管理
-- 支持微信、支付宝、银行卡、现金、基金、其他 6 种账户类型
+- 支持微信、支付宝、银行卡、现金、基金、信用卡、贷款、其他 8 种账户类型
+- 支持负债账户（信用卡、贷款），余额可为负数
 - 定期手动更新余额，每次更新自动存为快照
-- 多账户余额汇总，一键查看流动资产总额
+- 多账户余额汇总，一键查看账户余额总额
 
 ### 净资产趋势分析
 - 基于历史余额快照生成净资产趋势折线图（支持手势缩放与拖拽平移）
-- 净资产 = 流动资产 + 资产估值 − 未分摊购入成本
+- 净资产 = 账户余额 + 资产估值
 - 净资产目标设定与进度条可视化
 
 ### 实物资产管理
-- 8 种资产分类：车辆、房产、电子产品、数码、家具、家电、奢侈品、其他
+- 8 种资产分类：车辆、房产、电子产品、数码、家居、奢侈品、贵金属、其他
 - 资产生命周期管理：使用中 → 退役 / 已售
 - 估值追踪：可选开启，记录估值历史变化曲线
 - 卖出结算：自动计算购入价、卖价、贬值金额、累计持有成本、真实净支出、日均成本
@@ -73,6 +74,8 @@
 <p align="center">
   <img src="./docs/screenshots/calc.jpg" alt="持有成本计算" width="200">
   <img src="./docs/screenshots/calc2.jpg" alt="持有成本详情" width="200">
+  <img src="./docs/screenshots/calc3.jpg" alt="持有成本详情" width="200">
+  <img src="./docs/screenshots/calc4.jpg" alt="持有成本详情" width="200">
 </p>
 
 ### 数据安全
@@ -212,14 +215,17 @@ cd android
 npm test
 ```
 
-运行 7 个测试套件、158 个单元测试，覆盖：
+运行 8 个测试套件、207 个单元测试，覆盖：
 
 - 持有成本计算引擎（4 种分摊策略、经常性支出区间、卖出结算、维护分摊）
+- 净资产计算（含负债账户负余额）
+- 分摊策略推荐（8 种分类 → 策略映射）
 - 数据库 Repository 层 CRUD
-- Zustand Store 状态管理
+- Zustand Store 状态管理（含负数余额）
 - 数据服务（备份 / 导出 / 导入）
 - UI 组件渲染
 - 认证服务
+- 输入验证（正数 / 负数 / 日期 / 月份）
 - 引擎边界条件
 
 ---
@@ -231,13 +237,13 @@ worthbase/
 ├── app/                        # 页面路由（Expo Router）
 │   ├── _layout.tsx             #   根布局（Tab 导航 + AppState 自动备份）
 │   ├── index.tsx               #   总览面板（净资产 + 趋势图 + 持有成本汇总）
-│   ├── accounts.tsx            #   账户管理
+│   ├── accounts.tsx            #   账户管理（含负债账户）
 │   ├── assets.tsx              #   资产管理
-│   └── settings.tsx            #   设置
+│   └── settings.tsx            #   设置（从总览页齿轮图标进入）
 ├── src/
 │   ├── components/             # UI 组件
 │   │   ├── ui/                 #   基础 UI 组件库（Button, Card, Chip, FAB, BottomSheet 等）
-│   │   ├── AddAssetModal.tsx   #   3 步添加资产表单
+│   │   ├── AddAssetModal.tsx   #   添加资产表单（快捷模式 + 完整模式）
 │   │   ├── AssetDetailModal.tsx#   资产详情弹窗
 │   │   ├── DatePickerField.tsx #   日期选择器组件
 │   │   ├── TimeRangeSheet.tsx  #   时间区间选择底部弹窗
@@ -265,7 +271,7 @@ worthbase/
 │   ├── theme/                  # 主题系统（颜色 / 排版 / 间距 / 图标 / tokens）
 │   ├── types/                  # 类型定义（enums, models）
 │   └── utils/                  # 工具函数（加密 / 格式化 / 校验）
-├── __tests__/                  # 单元测试（7 套件 / 158 用例）
+├── __tests__/                  # 单元测试（8 套件 / 207 用例）
 │   ├── helpers/                #   测试辅助工具（mock-database 等）
 ├── assets/                     # 应用图标和启动画面
 ├── app.json                    # Expo 配置
@@ -280,7 +286,7 @@ worthbase/
 ┌─────────────────────────────────────────────────────┐
 │                    UI 层                              │
 │  app/*.tsx + src/components/                         │
-│  Expo Router 四 Tab 导航 + Paper MD3 组件            │
+│  Expo Router 三 Tab 导航 + Paper MD3 组件            │
 ├─────────────────────────────────────────────────────┤
 │                  状态管理层                            │
 │  src/stores/ (Zustand)                               │

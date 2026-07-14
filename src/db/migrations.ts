@@ -6,7 +6,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
 
 interface Migration {
   version: number;
@@ -72,6 +72,16 @@ const migrations: Migration[] = [
           ALTER TABLE assets ADD COLUMN weight_grams REAL;
         `);
       }
+    },
+  },
+  // Version 5: Merge FURNITURE + APPLIANCE categories into HOME
+  {
+    version: 5,
+    description: 'Merge furniture and appliance categories into home',
+    up: async (db: SQLiteDatabase) => {
+      await db.execAsync(`
+        UPDATE assets SET category = 'home' WHERE category IN ('furniture', 'appliance');
+      `);
     },
   },
 ];

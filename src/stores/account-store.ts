@@ -45,7 +45,7 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       sortOrder: maxOrder + 1,
     });
 
-    if (initialBalance !== undefined && initialBalance > 0) {
+    if (initialBalance !== undefined && initialBalance !== 0) {
       const today = new Date().toISOString().substring(0, 10);
       await BalanceSnapshotRepository.create({
         accountId: account.id,

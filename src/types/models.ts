@@ -155,9 +155,9 @@ export interface NetWorthResult {
   liquidAssets: number;
   /** Total asset valuations (sum of all active assets' current valuations) */
   assetValuations: number;
-  /** Total unamortized purchase cost */
+  /** Total unamortized purchase cost (internal use only, not shown to users) */
   unamortizedCost: number;
-  /** Net worth = liquidAssets + assetValuations - unamortizedCost */
+  /** Net worth = liquidAssets + assetValuations */
   netWorth: number;
 }
 
