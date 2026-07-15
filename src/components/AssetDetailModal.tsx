@@ -11,8 +11,8 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Alert,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { useAssetStore } from '@/stores/asset-store';
@@ -39,6 +39,8 @@ import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppButton } from '@/components/ui/Button';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { Icon } from '@/components/ui/Icon';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { useToast } from '@/hooks/useToast';
 import { radius } from '@/theme/tokens';
 
 export function AssetDetailModal({ asset, onClose, onEdit }: {
@@ -55,6 +57,14 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   const [showSettlement, setShowSettlement] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [settlement, setSettlement] = useState<SettlementResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
+
+  // Confirmation sheet states
+  const [confirmRetire, setConfirmRetire] = useState(false);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [deleteRecurringTarget, setDeleteRecurringTarget] = useState<RecurringExpense | null>(null);
+  const [deleteMaintenanceTarget, setDeleteMaintenanceTarget] = useState<MaintenanceRecord | null>(null);
 
   // Valuation update state
   const [showValuationInput, setShowValuationInput] = useState(false);
@@ -75,15 +85,20 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
 
   const loadData = useCallback(async () => {
     if (!asset) return;
-    const hc = await HoldingCostCalculator.calculate(asset);
-    setHoldingCost(hc);
-    setRecurring(await RecurringExpenseRepository.getByAsset(asset.id));
-    setMaintenance(await MaintenanceRepository.getByAsset(asset.id));
-    if (asset.status === AssetStatus.SOLD) {
-      const s = await SettlementCalculator.calculate(asset);
-      setSettlement(s);
-    } else {
-      setSettlement(null);
+    setLoading(true);
+    try {
+      const hc = await HoldingCostCalculator.calculate(asset);
+      setHoldingCost(hc);
+      setRecurring(await RecurringExpenseRepository.getByAsset(asset.id));
+      setMaintenance(await MaintenanceRepository.getByAsset(asset.id));
+      if (asset.status === AssetStatus.SOLD) {
+        const s = await SettlementCalculator.calculate(asset);
+        setSettlement(s);
+      } else {
+        setSettlement(null);
+      }
+    } finally {
+      setLoading(false);
     }
   }, [asset]);
 
@@ -96,81 +111,96 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   const isRetired = asset.status === AssetStatus.RETIRED;
   const iconName = ASSET_CATEGORY_ICONS[asset.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
 
-  const handleRetire = () => {
-    Alert.alert('退役资产', `确定要将"${asset.name}"标记为退役吗？`, [
-      { text: '取消', style: 'cancel' },
-      { text: '退役', style: 'destructive', onPress: async () => {
-        try { await markRetired(asset.id); await loadAssets(); onClose(); }
-        catch (err) { Alert.alert('操作失败', (err as Error).message); }
-      }},
-    ]);
+  const handleRetire = async () => {
+    try {
+      await markRetired(asset.id);
+      setConfirmRetire(false);
+      await loadAssets();
+      onClose();
+    } catch (err) {
+      toast.show(`操作失败: ${(err as Error).message}`, 'error');
+    }
   };
 
   const handleUpdateValuation = async () => {
     if (!asset || !newValuation.trim()) return;
     const val = parseFloat(newValuation);
-    if (isNaN(val) || val < 0) { Alert.alert('无效输入', '请输入有效的估值金额'); return; }
+    if (isNaN(val) || val < 0) { toast.show('请输入有效的估值金额', 'error'); return; }
     try {
       await updateValuation(asset.id, val);
       setShowValuationInput(false); setNewValuation('');
       await loadAssets(); await loadData();
-    } catch (err) { Alert.alert('更新失败', (err as Error).message); }
+    } catch (err) {
+      toast.show(`更新失败: ${(err as Error).message}`, 'error');
+    }
   };
 
   const handleAddRecurring = async () => {
     if (!asset || !recurringName.trim() || !recurringAmount.trim()) return;
     const amount = parseFloat(recurringAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('无效输入', '请输入有效的金额'); return; }
+    if (isNaN(amount) || amount <= 0) { toast.show('请输入有效的金额', 'error'); return; }
     try {
       await RecurringExpenseRepository.create({ assetId: asset.id, name: recurringName.trim(), amount, effectiveFrom: recurringFrom, effectiveTo: null });
       setRecurringName(''); setRecurringAmount(''); setShowAddRecurring(false);
       await loadData(); await loadAssets();
-    } catch (err) { Alert.alert('添加失败', (err as Error).message); }
+    } catch (err) {
+      toast.show(`添加失败: ${(err as Error).message}`, 'error');
+    }
   };
 
-  const handleDeleteRecurring = (re: RecurringExpense) => {
-    Alert.alert('删除经常性支出', `确定要删除"${re.name}"吗？`, [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: async () => {
-        try { await RecurringExpenseRepository.delete(re.id); await loadData(); await loadAssets(); }
-        catch (err) { Alert.alert('删除失败', (err as Error).message); }
-      }},
-    ]);
+  const handleDeleteRecurring = async () => {
+    if (!deleteRecurringTarget) return;
+    try {
+      await RecurringExpenseRepository.delete(deleteRecurringTarget.id);
+      setDeleteRecurringTarget(null);
+      await loadData(); await loadAssets();
+    } catch (err) {
+      toast.show(`删除失败: ${(err as Error).message}`, 'error');
+    }
   };
 
   const handleAddMaintenance = async () => {
     if (!asset || !maintenanceName.trim() || !maintenanceAmount.trim()) return;
     const amount = parseFloat(maintenanceAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('无效输入', '请输入有效的金额'); return; }
+    if (isNaN(amount) || amount <= 0) { toast.show('请输入有效的金额', 'error'); return; }
     try {
       await MaintenanceRepository.create({ assetId: asset.id, name: maintenanceName.trim(), amount, date: maintenanceDate, amortize: maintenanceAmortize });
       setMaintenanceName(''); setMaintenanceAmount(''); setShowAddMaintenance(false);
       await loadData(); await loadAssets();
-    } catch (err) { Alert.alert('添加失败', (err as Error).message); }
+    } catch (err) {
+      toast.show(`添加失败: ${(err as Error).message}`, 'error');
+    }
   };
 
-  const handleDeleteMaintenance = (m: MaintenanceRecord) => {
-    Alert.alert('删除维护记录', `确定要删除"${m.name}"吗？`, [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: async () => {
-        try { await MaintenanceRepository.delete(m.id); await loadData(); await loadAssets(); }
-        catch (err) { Alert.alert('删除失败', (err as Error).message); }
-      }},
-    ]);
+  const handleDeleteMaintenance = async () => {
+    if (!deleteMaintenanceTarget) return;
+    try {
+      await MaintenanceRepository.delete(deleteMaintenanceTarget.id);
+      setDeleteMaintenanceTarget(null);
+      await loadData(); await loadAssets();
+    } catch (err) {
+      toast.show(`删除失败: ${(err as Error).message}`, 'error');
+    }
   };
 
-  const handleRestore = () => {
-    Alert.alert('恢复资产', `确定要将"${asset.name}"恢复为使用中吗？`, [
-      { text: '取消', style: 'cancel' },
-      { text: '恢复', onPress: async () => {
-        try { await restoreAsset(asset.id); await loadAssets(); await loadData(); }
-        catch (err) { Alert.alert('操作失败', (err as Error).message); }
-      }},
-    ]);
+  const handleRestore = async () => {
+    try {
+      await restoreAsset(asset.id);
+      setConfirmRestore(false);
+      await loadAssets(); await loadData();
+    } catch (err) {
+      toast.show(`操作失败: ${(err as Error).message}`, 'error');
+    }
   };
 
   return (
     <AppBottomSheet visible={!!asset} onClose={onClose} snapPoints={['85%', '95%']}>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : (
+      <>
       {/* Header */}
       <View style={styles.header}>
         <Icon name={iconName} size={32} color="primary" />
@@ -276,7 +306,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
               <Text style={[styles.subName, { color: theme.colors.onSurface }]}>{re.name}</Text>
               <Text style={[styles.subAmount, { color: theme.colors.onSurface }]}>{formatCurrency(re.amount, currencySymbol)}/月</Text>
               <Text style={[styles.subPeriod, { color: theme.colors.tertiary }]}>{re.effectiveFrom.substring(0, 7)} ~ {re.effectiveTo ? re.effectiveTo.substring(0, 7) : '至今'}</Text>
-              {isActive && <AppButton title="✕" variant="text" compact onPress={() => handleDeleteRecurring(re)} />}
+              {isActive && <AppButton title="✕" variant="text" compact onPress={() => setDeleteRecurringTarget(re)} />}
             </View>
           )) : (
             <Text style={[styles.emptySubtext, { color: theme.colors.tertiary }]}>暂无经常性支出</Text>
@@ -304,7 +334,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
               <Text style={[styles.subName, { color: theme.colors.onSurface }]}>{m.name}</Text>
               <Text style={[styles.subAmount, { color: theme.colors.onSurface }]}>{formatCurrency(m.amount, currencySymbol)}</Text>
               <Text style={[styles.subPeriod, { color: theme.colors.tertiary }]}>{formatDate(m.date)}{m.amortize ? ' (分摊)' : ''}</Text>
-              {isActive && <AppButton title="✕" variant="text" compact onPress={() => handleDeleteMaintenance(m)} />}
+              {isActive && <AppButton title="✕" variant="text" compact onPress={() => setDeleteMaintenanceTarget(m)} />}
             </View>
           )) : (
             <Text style={[styles.emptySubtext, { color: theme.colors.tertiary }]}>暂无维护记录</Text>
@@ -329,13 +359,13 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
         {isActive && (
           <>
             <AppButton title="编辑" variant="secondary" onPress={() => setShowEdit(true)} style={{ flex: 1 }} />
-            <AppButton title="退役" variant="secondary" onPress={handleRetire} style={{ flex: 1, borderColor: theme.colors.warning }} labelStyle={{ color: theme.colors.warning }} />
+            <AppButton title="退役" variant="secondary" onPress={() => setConfirmRetire(true)} style={{ flex: 1, borderColor: theme.colors.warning }} labelStyle={{ color: theme.colors.warning }} />
             <AppButton title="卖出" variant="danger" onPress={() => setShowSettlement(true)} style={{ flex: 1 }} />
           </>
         )}
         {isRetired && (
           <>
-            <AppButton title="恢复" variant="secondary" onPress={handleRestore} style={{ flex: 1, borderColor: theme.colors.success }} labelStyle={{ color: theme.colors.success }} />
+            <AppButton title="恢复" variant="secondary" onPress={() => setConfirmRestore(true)} style={{ flex: 1, borderColor: theme.colors.success }} labelStyle={{ color: theme.colors.success }} />
             <AppButton title="卖出" variant="danger" onPress={() => setShowSettlement(true)} style={{ flex: 1 }} />
             <AppButton title="关闭" variant="text" onPress={onClose} style={{ flex: 1 }} />
           </>
@@ -354,6 +384,9 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
         </View>
       </AppBottomSheet>
 
+      </>
+      )}
+
       <SettlementModal
         visible={showSettlement}
         asset={asset}
@@ -362,7 +395,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
           try {
             await recordSale(asset.id, sellDate, sellPrice);
             await loadAssets(); setShowSettlement(false); onClose();
-          } catch (err) { Alert.alert('卖出失败', (err as Error).message); }
+          } catch (err) { toast.show(`卖出失败: ${(err as Error).message}`, 'error'); }
         }}
       />
 
@@ -371,6 +404,47 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
         editAsset={asset}
         onClose={() => setShowEdit(false)}
         onSaved={() => { setShowEdit(false); onClose(); }}
+      />
+
+      {/* Confirmation Sheets */}
+      <ConfirmSheet
+        visible={confirmRetire}
+        onClose={() => setConfirmRetire(false)}
+        onConfirm={handleRetire}
+        title="退役资产"
+        description={`确定要将"${asset.name}"标记为退役吗？`}
+        confirmLabel="退役"
+        icon="Archive"
+        variant="danger"
+      />
+      <ConfirmSheet
+        visible={confirmRestore}
+        onClose={() => setConfirmRestore(false)}
+        onConfirm={handleRestore}
+        title="恢复资产"
+        description={`确定要将"${asset.name}"恢复为使用中吗？`}
+        confirmLabel="恢复"
+        icon="RotateCcw"
+      />
+      <ConfirmSheet
+        visible={!!deleteRecurringTarget}
+        onClose={() => setDeleteRecurringTarget(null)}
+        onConfirm={handleDeleteRecurring}
+        title="删除经常性支出"
+        description={deleteRecurringTarget ? `确定要删除"${deleteRecurringTarget.name}"吗？` : undefined}
+        confirmLabel="删除"
+        icon="Trash2"
+        variant="danger"
+      />
+      <ConfirmSheet
+        visible={!!deleteMaintenanceTarget}
+        onClose={() => setDeleteMaintenanceTarget(null)}
+        onConfirm={handleDeleteMaintenance}
+        title="删除维护记录"
+        description={deleteMaintenanceTarget ? `确定要删除"${deleteMaintenanceTarget.name}"吗？` : undefined}
+        confirmLabel="删除"
+        icon="Trash2"
+        variant="danger"
       />
     </AppBottomSheet>
   );
@@ -419,6 +493,7 @@ function InfoRow({ label, value, theme }: { label: string; value: string; theme:
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: { justifyContent: 'center', alignItems: 'center', paddingVertical: 48 },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   assetName: { fontSize: 20, fontWeight: '700' },
   headerMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },

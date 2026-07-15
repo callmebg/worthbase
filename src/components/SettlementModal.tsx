@@ -10,14 +10,15 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { DatePickerField } from './DatePickerField';
 import { SettlementCalculator } from '@/engine/SettlementCalculator';
+import { useSettingsStore } from '@/stores/settings-store';
 import type { Asset, SettlementResult } from '@/types/models';
 import { formatCurrency, getCurrentDate } from '@/utils/format';
 import { isValidNonNegativeNumber } from '@/utils/validation';
+import { useToast } from '@/hooks/useToast';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { AppButton } from '@/components/ui/Button';
@@ -31,6 +32,8 @@ export function SettlementModal({ visible, asset, onClose, onConfirm }: {
   onConfirm: (sellDate: string, sellPrice: number) => void;
 }) {
   const theme = useAppTheme();
+  const { currencySymbol } = useSettingsStore();
+  const toast = useToast();
   const [sellDate, setSellDate] = useState(getCurrentDate());
   const [sellPrice, setSellPrice] = useState('');
   const [preview, setPreview] = useState<SettlementResult | null>(null);
@@ -57,7 +60,7 @@ export function SettlementModal({ visible, asset, onClose, onConfirm }: {
 
   const handleConfirm = () => {
     if (!sellPrice.trim() || !isValidNonNegativeNumber(sellPrice)) {
-      Alert.alert('无效输入', '请输入有效的卖出价格');
+      toast.show('请输入有效的卖出价格', 'error');
       return;
     }
     const price = parseFloat(sellPrice) || 0;
@@ -84,19 +87,19 @@ export function SettlementModal({ visible, asset, onClose, onConfirm }: {
       {preview ? (
         <View style={[styles.previewCard, { backgroundColor: theme.colors.surfaceVariant }]}>
           <Text style={[styles.previewTitle, { color: theme.colors.onSurface }]}>结算预览</Text>
-          <PreviewRow label="购入价" value={formatCurrency(preview.purchasePrice)} theme={theme} />
-          <PreviewRow label="卖价" value={formatCurrency(preview.sellPrice)} theme={theme} />
+          <PreviewRow label="购入价" value={formatCurrency(preview.purchasePrice, currencySymbol)} theme={theme} />
+          <PreviewRow label="卖价" value={formatCurrency(preview.sellPrice, currencySymbol)} theme={theme} />
           <PreviewRow
             label={preview.depreciation > 0 ? '贬值' : '升值'}
-            value={formatCurrency(Math.abs(preview.depreciation))}
+            value={formatCurrency(Math.abs(preview.depreciation), currencySymbol)}
             theme={theme}
             valueColor={preview.depreciation > 0 ? theme.colors.error : theme.colors.success}
           />
-          <PreviewRow label="累计持有成本" value={formatCurrency(preview.totalHoldingCost)} theme={theme} />
+          <PreviewRow label="累计持有成本" value={formatCurrency(preview.totalHoldingCost, currencySymbol)} theme={theme} />
           <View style={[styles.divider, { backgroundColor: theme.colors.outline }]} />
-          <PreviewRow label="真实净支出" value={formatCurrency(preview.netExpenditure)} theme={theme} bold valueColor={theme.colors.error} />
+          <PreviewRow label="真实净支出" value={formatCurrency(preview.netExpenditure, currencySymbol)} theme={theme} bold valueColor={theme.colors.error} />
           <PreviewRow label="持有天数" value={`${preview.ownershipDays} 天`} theme={theme} />
-          <PreviewRow label="日均成本" value={`${formatCurrency(preview.dailyAverageCost)}/天`} theme={theme} bold />
+          <PreviewRow label="日均成本" value={`${formatCurrency(preview.dailyAverageCost, currencySymbol)}/天`} theme={theme} bold />
         </View>
       ) : null}
 

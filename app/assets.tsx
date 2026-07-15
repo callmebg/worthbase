@@ -10,7 +10,6 @@ import {
   Text,
   FlatList,
   StyleSheet,
-  Alert,
   TouchableOpacity,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
@@ -20,6 +19,8 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
 import { AddAssetModal } from '@/components/AddAssetModal';
 import { AssetDetailModal } from '@/components/AssetDetailModal';
+import { HoldingCostExplainer } from '@/components/HoldingCostExplainer';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import {
   AssetStatus,
   AssetStatusLabels,
@@ -44,7 +45,9 @@ export default function AssetsScreen() {
   const { assets, statusFilter, loadAssets, setStatusFilter, deleteAsset } = useAssetStore();
   const { currencySymbol } = useSettingsStore();
   const [showAdd, setShowAdd] = useState(false);
+  const [showCostExplainer, setShowCostExplainer] = useState(false);
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [costMap, setCostMap] = useState<Map<string, HoldingCostResult>>(new Map());
 
   useFocusEffect(useCallback(() => { loadAssets(); }, []));
@@ -80,21 +83,16 @@ export default function AssetsScreen() {
     { key: AssetStatus.SOLD, label: '已售' },
   ];
 
-  const handleDelete = (asset: Asset) => {
-    Alert.alert('删除资产', `确定要删除"${asset.name}"吗？所有相关数据将永久删除。`, [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除', style: 'destructive', onPress: async () => {
-          try {
-            await deleteAsset(asset.id);
-            setDetailAsset(null);
-            toast.show('资产已删除', 'success');
-          } catch (err) {
-            Alert.alert('删除失败', (err as Error).message);
-          }
-        },
-      },
-    ]);
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteAsset(deleteTarget.id);
+      setDetailAsset(null);
+      setDeleteTarget(null);
+      toast.show('资产已删除', 'success');
+    } catch (err) {
+      toast.show(`删除失败: ${(err as Error).message}`, 'error');
+    }
   };
 
   return (
@@ -104,21 +102,7 @@ export default function AssetsScreen() {
         <View style={styles.overviewHeader}>
           <Text style={[styles.overviewTitle, { color: theme.colors.onSurface }]}>资产概览</Text>
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert(
-                '持有成本计算规则',
-                '持有成本 = 分摊成本 + 经常性支出 + 维护分摊\n\n' +
-                '【折旧成本】购入价按月摊消：\n' +
-                '• 简单线性：购入价 ÷ 已持有月数（递减）\n' +
-                '• 预期寿命：购入价 ÷ 预期使用月数（固定）\n' +
-                '• 残值分摊：(购入价 - 残值) ÷ 预期月数（固定）\n' +
-                '• 不分摊：月分摊 = 0\n\n' +
-                '【经常性支出】绑定在资产上的周期性费用（如保险、订阅），按月计算。\n\n' +
-                '【维护分摊】一次性维护费用，勾选"纳入分摊"后按剩余持有月数均摊。\n\n' +
-                '【资产总值】所有在用资产的当前估值之和。\n' +
-                '【月持有成本】所有在用资产的月持有成本之和。',
-              )
-            }
+            onPress={() => setShowCostExplainer(true)}
             style={styles.helpBtn}
           >
             <Icon name="Info" size={18} color="onSurfaceVariant" />
@@ -191,7 +175,7 @@ export default function AssetsScreen() {
                     cost={cost}
                     currencySymbol={currencySymbol}
                     onPress={() => setDetailAsset(asset)}
-                    onLongPress={() => handleDelete(asset)}
+                    onLongPress={() => setDeleteTarget(asset)}
                   />
                 );
               })}
@@ -202,7 +186,7 @@ export default function AssetsScreen() {
           <EmptyState
             icon="Package"
             title="暂无资产"
-            description="点击下方按钮添加第一个资产"
+            description="你买的东西，每个月都在花你的钱。&#10;记录它们，看看真相。"
             actionLabel="添加资产"
             onAction={() => setShowAdd(true)}
           />
@@ -215,6 +199,17 @@ export default function AssetsScreen() {
       {/* Modals — will be updated in Phase 11 */}
       <AddAssetModal visible={showAdd} onClose={() => setShowAdd(false)} onSaved={() => { loadAssets(); toast.show('资产已保存', 'success'); }} />
       <AssetDetailModal asset={detailAsset} onClose={() => setDetailAsset(null)} />
+      <HoldingCostExplainer visible={showCostExplainer} onClose={() => setShowCostExplainer(false)} />
+      <ConfirmSheet
+        visible={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="删除资产"
+        description={deleteTarget ? `确定要删除"${deleteTarget.name}"吗？所有相关数据将永久删除。` : undefined}
+        confirmLabel="删除"
+        icon="Trash2"
+        variant="danger"
+      />
     </View>
   );
 }
@@ -257,7 +252,7 @@ function AssetCardItem({ asset, cost, currencySymbol, onPress, onLongPress }: {
           <Text style={[styles.valuationAmount, { color: theme.colors.onSurface }]}>
             {formatCompactCurrency(valuation, currencySymbol)}
           </Text>
-          {change !== 0 ? (
+          {change !== 0 && asset.purchasePrice !== 0 ? (
             <Text style={[styles.changeText, { color: change > 0 ? theme.colors.success : theme.colors.error }]}>
               {change > 0 ? '↑' : '↓'} {Math.abs(change / asset.purchasePrice * 100).toFixed(0)}%
             </Text>
@@ -272,7 +267,7 @@ function AssetCardItem({ asset, cost, currencySymbol, onPress, onLongPress }: {
               {formatCurrency(cost.monthlyTotal, currencySymbol)}/月
             </Text>
             <Text style={[styles.costDaily, { color: theme.colors.onSurfaceVariant }]}>
-              {formatCurrency(cost.dailyAverage, currencySymbol)}/天
+              ≈ {formatCurrency(cost.dailyAverage, currencySymbol)}/天
             </Text>
           </View>
           <Text style={[styles.heldDuration, { color: theme.colors.onSurfaceVariant }]}>
@@ -311,7 +306,7 @@ const styles = StyleSheet.create({
   changeText: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   costInfo: { flexDirection: 'row', gap: 12 },
-  costMonthly: { fontSize: 14, fontWeight: '600' },
+  costMonthly: { fontSize: 15, fontWeight: '700' },
   costDaily: { fontSize: 13 },
   heldDuration: { fontSize: 12 },
 });

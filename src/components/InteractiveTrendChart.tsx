@@ -47,6 +47,8 @@ interface Props {
   yAxisWidth?: number;
   xAxisHeight?: number;
   goalValue?: number | null;
+  lossColor?: string;
+  goalColor?: string;
 }
 
 /* ── constants ──────────────────────────────────────────── */
@@ -70,6 +72,8 @@ export const InteractiveTrendChart: React.FC<Props> = ({
   yAxisWidth = 56,
   xAxisHeight = 24,
   goalValue = null,
+  lossColor = '#EA3943',
+  goalColor = '#FDCB6E',
 }) => {
   const totalPoints = data.values.length;
 
@@ -370,8 +374,8 @@ export const InteractiveTrendChart: React.FC<Props> = ({
                   <SvgLinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
                     <Stop offset="0%" stopColor={primaryColor} stopOpacity={0.45} />
                     <Stop offset={s0} stopColor={primaryColor} stopOpacity={0} />
-                    <Stop offset={s0} stopColor="#EA3943" stopOpacity={0} />
-                    <Stop offset="100%" stopColor="#EA3943" stopOpacity={0.12} />
+                    <Stop offset={s0} stopColor={lossColor} stopOpacity={0} />
+                    <Stop offset="100%" stopColor={lossColor} stopOpacity={0.12} />
                   </SvgLinearGradient>
                 </Defs>
 
@@ -394,13 +398,13 @@ export const InteractiveTrendChart: React.FC<Props> = ({
                     <SvgLine
                       x1={PAD} y1={goalLine.y}
                       x2={chartW - PAD} y2={goalLine.y}
-                      stroke="#FDCB6E"
+                      stroke={goalColor}
                       strokeWidth={1.5}
                       strokeDasharray="6,4"
                     />
                     <SvgText
                       x={chartW - PAD - 4} y={goalLine.y - 4}
-                      textAnchor="end" fill="#FDCB6E" fontSize={10}
+                      textAnchor="end" fill={goalColor} fontSize={10}
                     >
                       目标 {goalLine.label}
                     </SvgText>

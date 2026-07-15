@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Alert, Switch, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { DatePickerField } from './DatePickerField';
@@ -23,6 +23,7 @@ import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
 import type { Asset, RecurringExpense, MaintenanceRecord } from '@/types/models';
 import { getCurrentDate } from '@/utils/format';
 import { isValidPositiveNumber, isValidDate } from '@/utils/validation';
+import { useToast } from '@/hooks/useToast';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { AppChip } from '@/components/ui/Chip';
@@ -51,6 +52,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   editAsset?: Asset | null;
 }) {
   const theme = useAppTheme();
+  const toast = useToast();
   const { addAsset, editAsset: updateAsset } = useAssetStore();
   const [step, setStep] = useState(1);
   const [quickMode, setQuickMode] = useState(true);
@@ -181,7 +183,8 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         setRecurringExpenses(existingRecurring.map(r => ({
           id: r.id, name: r.name, amount: r.amount,
           effectiveFrom: r.effectiveFrom, effectiveTo: r.effectiveTo,
-        })));
+          endedReason: r.endedReason,
+        } as DraftRecurring)));
         const existingMaintenance = await MaintenanceRepository.getByAsset(editAsset.id);
         setMaintenanceRecords(existingMaintenance.map(m => ({
           id: m.id, name: m.name, amount: m.amount,
@@ -200,22 +203,23 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const lifespanYearsError = lifespanYears.trim() && parseFloat(lifespanYears) > 100 ? '不能超过100年（1200个月）' : undefined;
 
   const handleAddRecurring = () => {
-    if (!recurringName.trim()) { Alert.alert('提示', '请输入支出名称'); return; }
-    if (!recurringAmount.trim() || !isValidPositiveNumber(recurringAmount)) { Alert.alert('提示', '请输入有效的金额（大于 0）'); return; }
+    if (!recurringName.trim()) { toast.show('请输入支出名称', 'error'); return; }
+    if (!recurringAmount.trim() || !isValidPositiveNumber(recurringAmount)) { toast.show('请输入有效的金额（大于 0）', 'error'); return; }
     setRecurringExpenses([...recurringExpenses, {
       name: recurringName.trim(), amount: parseFloat(recurringAmount),
       effectiveFrom: purchaseDate.substring(0, 7), effectiveTo: null,
-    }]);
+      endedReason: null,
+    } as DraftRecurring]);
     setRecurringName(''); setRecurringAmount('');
   };
 
   const handleAddMaintenance = () => {
-    if (!maintenanceName.trim()) { Alert.alert('提示', '请输入维护名称'); return; }
-    if (!maintenanceAmount.trim() || !isValidPositiveNumber(maintenanceAmount)) { Alert.alert('提示', '请输入有效的金额（大于 0）'); return; }
+    if (!maintenanceName.trim()) { toast.show('请输入维护名称', 'error'); return; }
+    if (!maintenanceAmount.trim() || !isValidPositiveNumber(maintenanceAmount)) { toast.show('请输入有效的金额（大于 0）', 'error'); return; }
     setMaintenanceRecords([...maintenanceRecords, {
       name: maintenanceName.trim(), amount: parseFloat(maintenanceAmount),
       date: maintenanceDate, amortize: maintenanceAmortize,
-    }]);
+    } as DraftMaintenance]);
     setMaintenanceName(''); setMaintenanceAmount('');
   };
 
@@ -236,6 +240,23 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         sellDate: null,
         sellPrice: null,
       };
+
+      // Auto-add any unsaved inline form data before saving
+      if (maintenanceName.trim() && maintenanceAmount.trim() && isValidPositiveNumber(maintenanceAmount)) {
+        maintenanceRecords.push({
+          name: maintenanceName.trim(), amount: parseFloat(maintenanceAmount),
+          date: maintenanceDate, amortize: maintenanceAmortize,
+        } as DraftMaintenance);
+        setMaintenanceName(''); setMaintenanceAmount('');
+      }
+      if (recurringName.trim() && recurringAmount.trim() && isValidPositiveNumber(recurringAmount)) {
+        recurringExpenses.push({
+          name: recurringName.trim(), amount: parseFloat(recurringAmount),
+          effectiveFrom: purchaseDate.substring(0, 7), effectiveTo: null,
+          endedReason: null,
+        } as DraftRecurring);
+        setRecurringName(''); setRecurringAmount('');
+      }
 
       let savedAsset: Asset;
       if (editAsset) {
@@ -311,7 +332,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       onSaved?.();
       onClose();
     } catch (err) {
-      Alert.alert('保存失败', (err as Error).message);
+      toast.show(`保存失败: ${(err as Error).message}`, 'error');
     }
   };
 
@@ -340,7 +361,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       onSaved?.();
       onClose();
     } catch (err) {
-      Alert.alert('保存失败', (err as Error).message);
+      toast.show(`保存失败: ${(err as Error).message}`, 'error');
     }
   };
 
@@ -519,6 +540,15 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
                 onPress={() => { setUserModifiedAmortizationType(true); setAmortizationType(AmortizationType.NO_AMORTIZATION); setExpectedLifespan(''); }}
               />
             </View>
+
+            {!editAsset && recommendation.hint ? (
+              <View style={[styles.hintBox, { backgroundColor: theme.colors.primary + '12' }]}>
+                <Icon name="Info" size={14} color={theme.colors.primary} />
+                <Text style={[styles.hintBoxText, { color: theme.colors.primary }]}>
+                  {recommendation.hint}
+                </Text>
+              </View>
+            ) : null}
 
             {lifespanMode === 'custom' && (amortizationType === AmortizationType.EXPECTED_LIFESPAN || amortizationType === AmortizationType.RESIDUAL_VALUE) ? (
               <View>
@@ -701,6 +731,8 @@ const styles = StyleSheet.create({
   inlineAdd: { flexDirection: 'row', marginTop: 4 },
   footer: { flexDirection: 'row', gap: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'transparent' },
   errorHint: { fontSize: 12, marginBottom: 4, marginTop: -4 },
+  hintBox: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.sm, marginTop: 8, marginBottom: 4 },
+  hintBoxText: { fontSize: 13, flex: 1, lineHeight: 18 },
   moreLink: { alignSelf: 'center', paddingVertical: 10, marginTop: 4 },
   moreLinkText: { fontSize: 13, fontWeight: '500' },
 });

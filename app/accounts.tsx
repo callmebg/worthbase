@@ -11,7 +11,7 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
-  Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { useAccountStore } from '@/stores/account-store';
@@ -25,10 +25,10 @@ import { AppCard } from '@/components/ui/Card';
 import { AppButton } from '@/components/ui/Button';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { AppChip } from '@/components/ui/Chip';
-import { AppBottomSheet, BottomSheetTextInput } from '@/components/ui/BottomSheet';
-import type { AppBottomSheetRef } from '@/components/ui/BottomSheet';
+import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { Icon } from '@/components/ui/Icon';
-import { isValidPositiveNumber, isValidNumber } from '@/utils/validation';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
+import { isValidNumber } from '@/utils/validation';
 import { LIABILITY_ACCOUNT_TYPES } from '@/types/enums';
 import { useToast } from '@/hooks/useToast';
 import { spacing } from '@/theme/tokens';
@@ -42,6 +42,9 @@ export default function AccountsScreen() {
   const [updateTarget, setUpdateTarget] = useState<Account | null>(null);
   const [editTarget, setEditTarget] = useState<Account | null>(null);
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [actionTarget, setActionTarget] = useState<Account | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => { loadAccounts(); }, []);
 
@@ -53,61 +56,36 @@ export default function AccountsScreen() {
       setUpdateTarget(null);
       toast.show('余额已更新', 'success');
     } catch (err) {
-      Alert.alert('更新失败', (err as Error).message);
+      toast.show(`更新失败: ${(err as Error).message}`, 'error');
     }
   };
 
-  const handleArchive = (account: Account) => {
-    Alert.alert(
-      '存档账户',
-      `确定要存档"${account.name}"吗？存档后账户将被隐藏，但历史余额数据将保留。`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '存档', style: 'destructive', onPress: async () => {
-            try {
-              await deleteAccount(account.id);
-              toast.show('账户已存档', 'success');
-            } catch (err) {
-              Alert.alert('存档失败', (err as Error).message);
-            }
-          },
-        },
-      ]
-    );
+  const handleArchive = async () => {
+    if (!actionTarget) return;
+    try {
+      await deleteAccount(actionTarget.id);
+      setConfirmArchive(false);
+      setActionTarget(null);
+      toast.show('账户已存档', 'success');
+    } catch (err) {
+      toast.show(`存档失败: ${(err as Error).message}`, 'error');
+    }
   };
 
-  const handleHardDelete = (account: Account) => {
-    Alert.alert(
-      '彻底删除账户',
-      '此操作不可撤销，该账户及其所有余额记录将被永久删除。确定继续？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '彻底删除', style: 'destructive', onPress: async () => {
-            try {
-              await hardDelete(account.id);
-              toast.show('账户已删除', 'success');
-            } catch (err) {
-              Alert.alert('删除失败', (err as Error).message);
-            }
-          },
-        },
-      ]
-    );
+  const handleHardDelete = async () => {
+    if (!actionTarget) return;
+    try {
+      await hardDelete(actionTarget.id);
+      setConfirmDelete(false);
+      setActionTarget(null);
+      toast.show('账户已删除', 'success');
+    } catch (err) {
+      toast.show(`删除失败: ${(err as Error).message}`, 'error');
+    }
   };
 
   const handleLongPress = (account: Account) => {
-    Alert.alert(
-      account.name,
-      undefined,
-      [
-        { text: '编辑', onPress: () => setEditTarget(account) },
-        { text: '存档', style: 'destructive', onPress: () => handleArchive(account) },
-        { text: '彻底删除', style: 'destructive', onPress: () => handleHardDelete(account) },
-        { text: '取消', style: 'cancel' },
-      ],
-    );
+    setActionTarget(account);
   };
 
   return (
@@ -187,7 +165,7 @@ export default function AccountsScreen() {
             setShowAddSheet(false);
             toast.show('账户已添加', 'success');
           } catch (err) {
-            Alert.alert('添加失败', (err as Error).message);
+            toast.show(`添加失败: ${(err as Error).message}`, 'error');
           }
         }}
       />
@@ -216,17 +194,50 @@ export default function AccountsScreen() {
             setEditTarget(null);
             toast.show('已保存', 'success');
           } catch (err) {
-            Alert.alert('保存失败', (err as Error).message);
+            toast.show(`保存失败: ${(err as Error).message}`, 'error');
           }
         }}
         onArchive={(account) => {
           setEditTarget(null);
-          handleArchive(account);
+          setActionTarget(account);
+          setConfirmArchive(true);
         }}
         onHardDelete={(account) => {
           setEditTarget(null);
-          handleHardDelete(account);
+          setActionTarget(account);
+          setConfirmDelete(true);
         }}
+      />
+
+      {/* Account Action Sheet (long-press menu) */}
+      <AccountActionSheet
+        account={actionTarget}
+        onClose={() => setActionTarget(null)}
+        onEdit={(account) => { setActionTarget(null); setEditTarget(account); }}
+        onArchive={(account) => { setActionTarget(account); setConfirmArchive(true); }}
+        onDelete={(account) => { setActionTarget(account); setConfirmDelete(true); }}
+      />
+
+      {/* Confirmation Sheets */}
+      <ConfirmSheet
+        visible={confirmArchive}
+        onClose={() => setConfirmArchive(false)}
+        onConfirm={handleArchive}
+        title="存档账户"
+        description={actionTarget ? `确定要存档"${actionTarget.name}"吗？存档后账户将被隐藏，但历史余额数据将保留。` : undefined}
+        confirmLabel="存档"
+        icon="Archive"
+        variant="danger"
+      />
+      <ConfirmSheet
+        visible={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={handleHardDelete}
+        title="彻底删除账户"
+        description="此操作不可撤销，该账户及其所有余额记录将被永久删除。"
+        confirmLabel="彻底删除"
+        icon="Trash2"
+        variant="danger"
       />
     </View>
   );
@@ -312,6 +323,7 @@ function UpdateBalanceSheet({ account, currentBalance, onClose, onUpdate }: {
   onUpdate: (accountId: string, balance: number) => void;
 }) {
   const theme = useAppTheme();
+  const { currencySymbol } = useSettingsStore();
   const [balance, setBalance] = useState('');
 
   useEffect(() => { setBalance(''); }, [account]);
@@ -356,6 +368,7 @@ function BalanceHistorySheet({ visible, onClose }: {
   onClose: () => void;
 }) {
   const theme = useAppTheme();
+  const { currencySymbol } = useSettingsStore();
   const [dates, setDates] = useState<{ date: string; balances: { accountId: string; balance: number }[] }[]>([]);
 
   useEffect(() => {
@@ -468,6 +481,72 @@ function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }:
     </AppBottomSheet>
   );
 }
+
+// ── Account Action Sheet (long-press menu) ──
+
+function AccountActionSheet({ account, onClose, onEdit, onArchive, onDelete }: {
+  account: Account | null;
+  onClose: () => void;
+  onEdit: (account: Account) => void;
+  onArchive: (account: Account) => void;
+  onDelete: (account: Account) => void;
+}) {
+  const theme = useAppTheme();
+  if (!account) return null;
+
+  return (
+    <AppBottomSheet visible={!!account} onClose={onClose} snapPoints={['35%']}>
+      <View style={actionStyles.header}>
+        <Icon
+          name={ACCOUNT_TYPE_ICONS[account.type] || 'CreditCard'}
+          size={24}
+          color="primary"
+        />
+        <View style={actionStyles.headerText}>
+          <Text style={[actionStyles.name, { color: theme.colors.onSurface }]}>
+            {account.name}
+          </Text>
+          <Text style={[actionStyles.type, { color: theme.colors.onSurfaceVariant }]}>
+            {AccountTypeLabels[account.type]}
+          </Text>
+        </View>
+      </View>
+
+      <View style={[actionStyles.divider, { backgroundColor: theme.colors.outline }]} />
+
+      <TouchableOpacity style={actionStyles.actionRow} onPress={() => onEdit(account)}>
+        <Icon name="Pencil" size={20} color={theme.colors.onSurface} />
+        <Text style={[actionStyles.actionLabel, { color: theme.colors.onSurface }]}>编辑</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={actionStyles.actionRow} onPress={() => onArchive(account)}>
+        <Icon name="Archive" size={20} color={theme.colors.onSurfaceVariant} />
+        <Text style={[actionStyles.actionLabel, { color: theme.colors.onSurfaceVariant }]}>存档</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={actionStyles.actionRow} onPress={() => onDelete(account)}>
+        <Icon name="Trash2" size={20} color={theme.colors.error} />
+        <Text style={[actionStyles.actionLabel, { color: theme.colors.error }]}>彻底删除</Text>
+      </TouchableOpacity>
+    </AppBottomSheet>
+  );
+}
+
+const actionStyles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: spacing.md },
+  headerText: { flex: 1 },
+  name: { fontSize: 18, fontWeight: '700' },
+  type: { fontSize: 13, marginTop: 2 },
+  divider: { height: StyleSheet.hairlineWidth, marginBottom: spacing.sm },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.xs,
+  },
+  actionLabel: { fontSize: 16 },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

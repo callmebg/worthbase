@@ -10,7 +10,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Alert,
   TouchableOpacity,
   Linking,
 } from 'react-native';
@@ -32,6 +31,7 @@ import { AppButton } from '@/components/ui/Button';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { Icon } from '@/components/ui/Icon';
+import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { useToast } from '@/hooks/useToast';
 
 const THEME_COLOR_LABELS: Record<string, string> = { purple: '紫色', blue: '蓝色', green: '绿色', orange: '橙色' };
@@ -65,6 +65,10 @@ export default function SettingsScreen() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  // Confirmation sheet states
+  const [confirmImport, setConfirmImport] = useState<{ uri: string; preview: string } | null>(null);
+  const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
+
   useEffect(() => {
     AuthService.isBiometricAvailable().then(setBiometricAvailable);
     AuthService.getBiometricType().then(setBiometricType);
@@ -82,7 +86,7 @@ export default function SettingsScreen() {
 
   const handlePinConfirm = async () => {
     if (pinInput.length < 4) {
-      Alert.alert('PIN 太短', '请输入至少4位数字');
+      toast.show('PIN 至少需要 4 位数字', 'error');
       return;
     }
     await AuthService.savePin(pinInput);
@@ -96,12 +100,12 @@ export default function SettingsScreen() {
     if (enabled) {
       const available = await AuthService.isBiometricAvailable();
       if (!available) {
-        Alert.alert('不可用', '当前设备不支持生物识别或未录入指纹/Face ID');
+        toast.show('当前设备不支持生物识别或未录入指纹/Face ID', 'error');
         return;
       }
       const success = await AuthService.authenticateWithBiometric();
       if (!success) {
-        Alert.alert('验证失败', '生物识别验证未通过，请重试');
+        toast.show('生物识别验证未通过，请重试', 'error');
         return;
       }
     }
@@ -114,7 +118,7 @@ export default function SettingsScreen() {
       await ExportService.exportJSON();
       toast.show('JSON 数据已导出', 'success');
     } catch (err) {
-      Alert.alert('导出失败', (err as Error).message);
+      toast.show(`导出失败: ${(err as Error).message}`, 'error');
     } finally {
       setExporting(false);
     }
@@ -126,7 +130,7 @@ export default function SettingsScreen() {
       await ExportService.exportCSV();
       toast.show('CSV 数据已导出', 'success');
     } catch (err) {
-      Alert.alert('导出失败', (err as Error).message);
+      toast.show(`导出失败: ${(err as Error).message}`, 'error');
     } finally {
       setExporting(false);
     }
@@ -142,33 +146,27 @@ export default function SettingsScreen() {
 
       const fileUri = result.assets[0].uri;
       const preview = await ImportService.preview(fileUri);
-      Alert.alert(
-        '导入预览',
-        `将导入：\n${preview.accounts} 个账户\n${preview.assets} 个资产\n${preview.snapshots} 条余额快照\n\n⚠️ 将替换当前所有数据`,
-        [
-          { text: '取消', style: 'cancel' },
-          {
-            text: '确认导入',
-            style: 'destructive',
-            onPress: async () => {
-              setImporting(true);
-              try {
-                await ImportService.importReplace(fileUri);
-                await useAccountStore.getState().loadAccounts();
-                await useAssetStore.getState().loadAssets();
-                await settings.loadSettings();
-                toast.show('数据已恢复', 'success');
-              } catch (err) {
-                Alert.alert('导入失败', (err as Error).message);
-              } finally {
-                setImporting(false);
-              }
-            },
-          },
-        ],
-      );
+      const previewText = `${preview.accounts} 个账户、${preview.assets} 个资产、${preview.snapshots} 条余额快照\n\n将替换当前所有数据`;
+      setConfirmImport({ uri: fileUri, preview: previewText });
     } catch (err) {
-      Alert.alert('导入失败', (err as Error).message);
+      toast.show(`导入失败: ${(err as Error).message}`, 'error');
+    }
+  };
+
+  const doImport = async () => {
+    if (!confirmImport) return;
+    setImporting(true);
+    try {
+      await ImportService.importReplace(confirmImport.uri);
+      await useAccountStore.getState().loadAccounts();
+      await useAssetStore.getState().loadAssets();
+      await settings.loadSettings();
+      setConfirmImport(null);
+      toast.show('数据已恢复', 'success');
+    } catch (err) {
+      toast.show(`导入失败: ${(err as Error).message}`, 'error');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -178,30 +176,19 @@ export default function SettingsScreen() {
     setShowBackups(true);
   };
 
-  const handleRestoreBackup = (fileName: string) => {
-    Alert.alert(
-      '恢复备份',
-      `确定要恢复备份 ${fileName} 吗？\n\n⚠️ 当前数据将被替换`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确认恢复',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await BackupService.restoreFromBackup(fileName);
-              await useAccountStore.getState().loadAccounts();
-              await useAssetStore.getState().loadAssets();
-              await settings.loadSettings();
-              setShowBackups(false);
-              toast.show('已从备份恢复', 'success');
-            } catch (err) {
-              Alert.alert('恢复失败', (err as Error).message);
-            }
-          },
-        },
-      ],
-    );
+  const doRestoreBackup = async () => {
+    if (!confirmRestore) return;
+    try {
+      await BackupService.restoreFromBackup(confirmRestore);
+      await useAccountStore.getState().loadAccounts();
+      await useAssetStore.getState().loadAssets();
+      await settings.loadSettings();
+      setShowBackups(false);
+      setConfirmRestore(null);
+      toast.show('已从备份恢复', 'success');
+    } catch (err) {
+      toast.show(`恢复失败: ${(err as Error).message}`, 'error');
+    }
   };
 
   return (
@@ -345,7 +332,7 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>关于</Text>
         <AppListItem
           title="家底 WorthBase"
-          description="v1.2.1"
+          description="v1.3.1"
           icon="Info"
         />
         <Text style={[styles.aboutDesc, { color: theme.colors.onSurfaceVariant }]}>
@@ -406,7 +393,7 @@ export default function SettingsScreen() {
                   rightElement="text"
                   rightText="恢复"
                   icon="HardDrive"
-                  onPress={() => handleRestoreBackup(fileName)}
+                  onPress={() => setConfirmRestore(fileName)}
                 />
               );
             })}
@@ -414,6 +401,29 @@ export default function SettingsScreen() {
         )}
         <AppButton title="关闭" variant="primary" onPress={() => setShowBackups(false)} style={{ marginTop: spacing.md }} />
       </AppBottomSheet>
+
+      {/* Confirmation Sheets */}
+      <ConfirmSheet
+        visible={!!confirmImport}
+        onClose={() => setConfirmImport(null)}
+        onConfirm={doImport}
+        title="确认导入"
+        description={confirmImport?.preview}
+        confirmLabel="确认导入"
+        icon="Upload"
+        variant="danger"
+        loading={importing}
+      />
+      <ConfirmSheet
+        visible={!!confirmRestore}
+        onClose={() => setConfirmRestore(null)}
+        onConfirm={doRestoreBackup}
+        title="恢复备份"
+        description={confirmRestore ? `确定要恢复备份 ${confirmRestore} 吗？当前数据将被替换。` : undefined}
+        confirmLabel="确认恢复"
+        icon="RotateCcw"
+        variant="danger"
+      />
     </ScrollView>
   );
 }

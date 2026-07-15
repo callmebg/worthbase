@@ -25,8 +25,9 @@ import { useAssetStore } from '@/stores/asset-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { NetWorthCalculator } from '@/engine/NetWorthCalculator';
 import { ProjectionCalculator } from '@/engine/ProjectionCalculator';
+import type { ProjectionDetail } from '@/engine/ProjectionCalculator';
+import { GoalProjectionExplainer } from '@/components/GoalProjectionExplainer';
 import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
-import { getStrategy } from '@/engine/strategies';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
@@ -82,6 +83,8 @@ export default function DashboardScreen() {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [showExplainer, setShowExplainer] = useState(false);
   const [achievementDate, setAchievementDate] = useState<string | null>(null);
+  const [projectionDetail, setProjectionDetail] = useState<ProjectionDetail | null>(null);
+  const [showProjectionExplainer, setShowProjectionExplainer] = useState(false);
   const [showGoalSheet, setShowGoalSheet] = useState(false);
   const [goalInput, setGoalInput] = useState('');
 
@@ -211,9 +214,12 @@ export default function DashboardScreen() {
 
     // Estimate goal achievement date based on historical trend
     if (netWorthGoal && allPoints.length >= 2) {
-      setAchievementDate(ProjectionCalculator.estimateAchievementDate(allPoints, netWorthGoal));
+      const detail = ProjectionCalculator.estimateProjectionDetail(allPoints, netWorthGoal);
+      setAchievementDate(detail?.achievementDate ?? null);
+      setProjectionDetail(detail);
     } else {
       setAchievementDate(null);
+      setProjectionDetail(null);
     }
 
     // Downsample to ≤ MAX_POINTS preserving peaks and valleys
@@ -323,11 +329,17 @@ export default function DashboardScreen() {
         ) : null}
 
         {netWorthGoal && progress < 100 && (
-          <Text style={[styles.goalHint, { color: theme.colors.onPrimary }]}>
-            {achievementDate
-              ? `预计 ${achievementDate.substring(0, 4)}年${achievementDate.substring(5, 7)}月 达成`
-              : '按当前趋势暂无法预估'}
-          </Text>
+          <TouchableOpacity
+            onPress={() => projectionDetail && setShowProjectionExplainer(true)}
+            disabled={!projectionDetail}
+            hitSlop={8}
+          >
+            <Text style={[styles.goalHint, { color: theme.colors.onPrimary }, projectionDetail && { textDecorationLine: 'underline' }]}>
+              {achievementDate
+                ? `预计 ${achievementDate.substring(0, 4)}年${achievementDate.substring(5, 7)}月 达成`
+                : '按当前趋势暂无法预估'}
+            </Text>
+          </TouchableOpacity>
         )}
 
       </View>
@@ -401,6 +413,8 @@ export default function DashboardScreen() {
             labelColor={theme.colors.onSurfaceVariant}
             gridColor={theme.colors.surfaceVariant}
             goalValue={netWorthGoal}
+            lossColor={theme.colors.error}
+            goalColor={theme.colors.warning}
           />
           {/* ── Period change delta ── */}
           {(() => {
@@ -561,6 +575,8 @@ export default function DashboardScreen() {
             labelColor={theme.colors.onSurfaceVariant}
             gridColor={theme.colors.surfaceVariant}
             goalValue={netWorthGoal}
+            lossColor={theme.colors.error}
+            goalColor={theme.colors.warning}
           />
         </View>
       </SafeAreaView>
@@ -581,6 +597,15 @@ export default function DashboardScreen() {
     <NetWorthExplainer
       visible={showExplainer}
       onClose={() => setShowExplainer(false)}
+    />
+
+    {/* ── Goal Projection Explainer Sheet ── */}
+    <GoalProjectionExplainer
+      visible={showProjectionExplainer}
+      onClose={() => setShowProjectionExplainer(false)}
+      projection={projectionDetail}
+      goal={netWorthGoal ?? 0}
+      currencySymbol={currencySymbol}
     />
 
     {/* ── Net Worth Goal Sheet ── */}
