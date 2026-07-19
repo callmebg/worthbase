@@ -4,7 +4,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/callmebg/worthbase?color=blue" alt="License"></a>
   <a href="https://github.com/callmebg/worthbase/releases"><img src="https://img.shields.io/github/v/release/callmebg/worthbase" alt="Release"></a>
   <img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-brightgreen" alt="Platform">
-  <img src="https://img.shields.io/badge/Expo-SDK%2057-black" alt="Expo">
+  <img src="https://img.shields.io/badge/Expo-SDK%2055-black" alt="Expo">
   <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome"></a>
 </p>
 
@@ -96,8 +96,8 @@
 
 | 类别 | 技术 |
 |------|------|
-| 框架 | React Native 0.86 + Expo SDK 57 |
-| 语言 | TypeScript 6.0 |
+| 框架 | React Native 0.83 + Expo SDK 55 |
+| 语言 | TypeScript 5.9 |
 | 路由 | Expo Router (File-based) |
 | 数据库 | expo-sqlite (SQLite) |
 | 状态管理 | Zustand |
@@ -388,6 +388,33 @@ export const MyNewStrategy: AmortizationStrategy = {
 - 运行测试：`npm test`
 - TypeScript 严格模式，路径别名 `@/` → `src/`
 - 新功能请配套单元测试，保持覆盖率
+
+---
+
+## 📝 技术文章系列
+
+本项目的开发过程和核心实现写成了系列技术文章，分为两个轨道：
+
+### 轨道 A — 独立开发者实战（3 篇）
+
+| 文章 | 角度 | 文件 |
+|------|------|------|
+| 我花 600 元用 AI 做了一个本地优先的个人财务 App | 技术选型 + 核心实现 | [01-tech-angle.md](./docs/articles/marketing/01-tech-angle.md) |
+| 一个人 5 天从 0 到 1 做一个 App | 项目管理 + vibe coding | [02-pm-angle.md](./docs/articles/marketing/02-pm-angle.md) |
+| 三篇小红书推广开源 App 的真实数据 | 推广复盘 + 算法惩罚链 | [03-growth-retro.md](./docs/articles/marketing/03-growth-retro.md) |
+
+### 轨道 B — 技术深度文档（8 篇）
+
+| 文章 | 主题 | 文件 |
+|------|------|------|
+| 技术架构全解析 | 技术选型 + 项目结构 | [01-project-overview.md](./docs/articles/technical/01-project-overview.md) |
+| 持有成本 4 种分摊策略 | Strategy 模式 + 智能推荐 | [02-holding-cost.md](./docs/articles/technical/02-holding-cost.md) |
+| 本地优先架构实践 | SQLite + Repository + 自动备份 | [03-local-first-architecture.md](./docs/articles/technical/03-local-first-architecture.md) |
+| 净资产趋势可视化 | SVG 图表 + 手势交互 + 降采样 | [04-net-worth-visualization.md](./docs/articles/technical/04-net-worth-visualization.md) |
+| 资产生命周期管理 | 状态机 + 卖出结算算法 | [05-asset-lifecycle.md](./docs/articles/technical/05-asset-lifecycle.md) |
+| 多账户余额管理 | 8 种账户类型 + 负债 + 快照 | [06-account-balance.md](./docs/articles/technical/06-account-balance.md) |
+| React Native / Expo 开发体验 | 项目结构 + 跨平台 + EAS | [07-react-native-dx.md](./docs/articles/technical/07-react-native-dx.md) |
+| UI 组件库与设计系统 | Token 驱动 + 暗色模式 | [08-design-system.md](./docs/articles/technical/08-design-system.md) |
 
 ---
 
