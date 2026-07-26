@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-07-26
+
+### Added
+- 次均成本追踪：一键记录物品使用次数，计算「购买价格 ÷ 使用次数 = 次均成本」
+- 资产卡片增强：次均成本作为英雄数字，月持有成本降为辅助信息行
+- 使用追踪开关：按资产独立控制，默认关闭，不用的物品不打扰
+- 每日上限：同一物品每天只能记录一次，防止误触刷次数
+- 使用记录管理：详情页统计卡片、+1 按钮、使用历史时间线、次均趋势变化
+- 闲置提醒：90 天以上未使用的物品自动检测，仪表盘「闲置提醒」tab 汇总
+- 里程碑庆祝：次均成本跌破 ¥500 / ¥200 / ¥100 / ¥50 自动 🎉 提示
+- 仪表盘洞察卡片：「最贵单次」「闲置提醒」双 tab 切换
+- 下拉彩蛋：总览页下拉刷新随机显示一句理财吉祥话
+- 触觉反馈：+1 使用时轻触觉震动（expo-haptics）
+
+### Changed
+- 数据库新增 `usage_records` 表，schema 版本升级至 v7
+- 资产表新增 `usage_tracking` 字段（按资产开关）
+- 引擎层新增 `UsageCalculator`（次均成本计算 + 闲置检测）
+- 资产卡片 UI 重构：信息层级从 6 个元素精简为 2 行
+- README 中/英文版同步更新
+
 ## [1.0.0] - 2026-07-12
 
 ### Added

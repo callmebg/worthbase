@@ -18,6 +18,7 @@ interface AssetRow {
   residual_value: number | null;
   valuation_tracking: number;
   current_valuation: number | null;
+  usage_tracking: number;
   status: string;
   sell_date: string | null;
   sell_price: number | null;
@@ -39,6 +40,7 @@ function rowToAsset(row: AssetRow): Asset {
     residualValue: row.residual_value,
     valuationTracking: !!row.valuation_tracking,
     currentValuation: row.current_valuation,
+    usageTracking: !!row.usage_tracking,
     status: row.status as AssetStatus,
     sellDate: row.sell_date,
     sellPrice: row.sell_price,
@@ -90,12 +92,12 @@ export const AssetRepository = {
       `INSERT INTO assets (
         id, name, category, purchase_date, purchase_price,
         amortization_type, expected_lifespan_months, residual_value,
-        valuation_tracking, current_valuation, status,
+        valuation_tracking, current_valuation, usage_tracking, status,
         sell_date, sell_price, weight_grams, image_path, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       id, asset.name, asset.category, asset.purchaseDate, asset.purchasePrice,
       asset.amortizationType, asset.expectedLifespanMonths, asset.residualValue,
-      asset.valuationTracking ? 1 : 0, asset.currentValuation,
+      asset.valuationTracking ? 1 : 0, asset.currentValuation, asset.usageTracking ? 1 : 0,
       asset.status, asset.sellDate, asset.sellPrice, asset.weightGrams, asset.imagePath, now, now
     );
     return { ...asset, id, createdAt: now, updatedAt: now };
@@ -116,6 +118,7 @@ export const AssetRepository = {
     if (updates.residualValue !== undefined) { fields.push('residual_value = ?'); values.push(updates.residualValue); }
     if (updates.valuationTracking !== undefined) { fields.push('valuation_tracking = ?'); values.push(updates.valuationTracking ? 1 : 0); }
     if (updates.currentValuation !== undefined) { fields.push('current_valuation = ?'); values.push(updates.currentValuation); }
+    if (updates.usageTracking !== undefined) { fields.push('usage_tracking = ?'); values.push(updates.usageTracking ? 1 : 0); }
     if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status); }
     if (updates.sellDate !== undefined) { fields.push('sell_date = ?'); values.push(updates.sellDate); }
     if (updates.sellPrice !== undefined) { fields.push('sell_price = ?'); values.push(updates.sellPrice); }

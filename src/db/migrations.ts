@@ -6,7 +6,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 7;
 
 interface Migration {
   version: number;
@@ -82,6 +82,40 @@ const migrations: Migration[] = [
       await db.execAsync(`
         UPDATE assets SET category = 'home' WHERE category IN ('furniture', 'appliance');
       `);
+    },
+  },
+  // Version 6: Add usage_records table for cost-per-use tracking
+  {
+    version: 6,
+    description: 'Add usage_records table for cost-per-use tracking',
+    up: async (db: SQLiteDatabase) => {
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS usage_records (
+          id TEXT PRIMARY KEY NOT NULL,
+          asset_id TEXT NOT NULL,
+          used_at TEXT NOT NULL,
+          note TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_usage_asset_date ON usage_records(asset_id, used_at);
+        CREATE INDEX IF NOT EXISTS idx_usage_used_at ON usage_records(used_at);
+      `);
+    },
+  },
+  // Version 7: Add usage_tracking column to assets
+  {
+    version: 7,
+    description: 'Add usage_tracking column to assets for cost-per-use opt-in',
+    up: async (db: SQLiteDatabase) => {
+      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(assets);');
+      const hasColumn = columns.some((column) => column.name === 'usage_tracking');
+
+      if (!hasColumn) {
+        await db.execAsync(`
+          ALTER TABLE assets ADD COLUMN usage_tracking INTEGER NOT NULL DEFAULT 0;
+        `);
+      }
     },
   },
 ];

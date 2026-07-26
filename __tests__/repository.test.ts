@@ -226,6 +226,7 @@ describe('Asset Repository', () => {
       residualValue: null,
       valuationTracking: false,
       currentValuation: null,
+      usageTracking: false,
       status: AssetStatus.ACTIVE,
       sellDate: null,
       sellPrice: null,
@@ -248,14 +249,14 @@ describe('Asset Repository', () => {
       name: 'Active Asset', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
     await AssetRepository.create({
       name: 'Retired Asset', category: AssetCategory.HOME,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.RETIRED, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -273,14 +274,14 @@ describe('Asset Repository', () => {
       name: 'Phone', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
     await AssetRepository.create({
       name: 'Sofa', category: AssetCategory.HOME,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -294,7 +295,7 @@ describe('Asset Repository', () => {
       name: 'Original', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: 36,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -315,7 +316,7 @@ describe('Asset Repository', () => {
       name: 'Test', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -329,7 +330,7 @@ describe('Asset Repository', () => {
       name: 'Test', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -345,7 +346,7 @@ describe('Asset Repository', () => {
       name: 'ToDelete', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -359,7 +360,7 @@ describe('Asset Repository', () => {
       name: 'Tracked', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: true, currentValuation: 900,
+      residualValue: null, valuationTracking: true, currentValuation: 900, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -385,7 +386,7 @@ describe('Valuation Repository', () => {
       name: 'Test', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: true, currentValuation: null,
+      residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -404,7 +405,7 @@ describe('Valuation Repository', () => {
       name: 'Test', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: true, currentValuation: null,
+      residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -423,14 +424,14 @@ describe('Valuation Repository', () => {
       name: 'A', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: true, currentValuation: null,
+      residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
     const asset2 = await AssetRepository.create({
       name: 'B', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: true, currentValuation: null,
+      residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -448,7 +449,7 @@ describe('Valuation Repository', () => {
       name: 'Test', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: true, currentValuation: null,
+      residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -590,7 +591,7 @@ describe('AssetRepository - markRetired with ended_reason', () => {
       name: 'Test', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 
@@ -623,7 +624,7 @@ describe('AssetRepository - markRetired with ended_reason', () => {
       name: 'Test', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
-      residualValue: null, valuationTracking: false, currentValuation: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
       status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
     });
 

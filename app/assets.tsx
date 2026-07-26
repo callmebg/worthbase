@@ -17,6 +17,8 @@ import { useFocusEffect } from 'expo-router';
 import { useAssetStore } from '@/stores/asset-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
+import { UsageCalculator } from '@/engine/UsageCalculator';
+import { UsageRepository } from '@/db/usage-repository';
 import { AddAssetModal } from '@/components/AddAssetModal';
 import { AssetDetailModal } from '@/components/AssetDetailModal';
 import { HoldingCostExplainer } from '@/components/HoldingCostExplainer';
@@ -28,7 +30,7 @@ import {
   AssetCategoryLabels,
 } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS, ASSET_STATUS_ICONS } from '@/theme/icons';
-import type { Asset, HoldingCostResult } from '@/types/models';
+import type { Asset, HoldingCostResult, UsageResult } from '@/types/models';
 import { formatCurrency, formatCompactCurrency, getMonthsHeld } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
@@ -49,6 +51,7 @@ export default function AssetsScreen() {
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [costMap, setCostMap] = useState<Map<string, HoldingCostResult>>(new Map());
+  const [usageMap, setUsageMap] = useState<Map<string, UsageResult>>(new Map());
 
   useFocusEffect(useCallback(() => { loadAssets(); }, []));
 
@@ -57,6 +60,14 @@ export default function AssetsScreen() {
       const activeAssets = assets.filter(a => a.status === AssetStatus.ACTIVE);
       const results = await HoldingCostCalculator.calculateAll(activeAssets);
       setCostMap(results);
+    })();
+  }, [assets]);
+
+  useEffect(() => {
+    (async () => {
+      const activeWithCost = assets.filter(a => a.status === AssetStatus.ACTIVE);
+      const results = await UsageCalculator.calculateAll(activeWithCost);
+      setUsageMap(results);
     })();
   }, [assets]);
 
@@ -82,6 +93,55 @@ export default function AssetsScreen() {
     { key: AssetStatus.RETIRED, label: '退役' },
     { key: AssetStatus.SOLD, label: '已售' },
   ];
+
+  const handleUsagePlusOne = async (assetId: string) => {
+    // Prevent duplicate on the same day
+    const today = new Date().toISOString().substring(0, 10);
+    const lastUsed = await UsageRepository.getLastUsed(assetId);
+    if (lastUsed === today) {
+      toast.show('今天已经记录过了', 'info');
+      return;
+    }
+
+    // Haptic feedback — gracefully degrade if unavailable
+    try {
+      const Haptics = require('expo-haptics');
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    try {
+      await UsageRepository.create({
+        assetId,
+        usedAt: today,
+        note: null,
+      });
+      const asset = assets.find(a => a.id === assetId);
+      if (asset) {
+        const result = await UsageCalculator.calculate(asset);
+        setUsageMap(prev => new Map(prev).set(assetId, result));
+
+        // Milestone celebration
+        const oldCostPerUse = usageMap.get(assetId)?.costPerUse ?? Infinity;
+        const newCostPerUse = result.costPerUse;
+        const milestones = [500, 200, 100, 50];
+        for (const threshold of milestones) {
+          if (oldCostPerUse >= threshold && newCostPerUse < threshold) {
+            toast.show(`🎉 次均成本突破 ¥${threshold}！`, 'success', 3000);
+            break;
+          }
+        }
+        if (newCostPerUse < 500 || oldCostPerUse >= 500) {
+          // Only show normal toast if no milestone was hit
+          if (!milestones.some(t => oldCostPerUse >= t && newCostPerUse < t)) {
+            toast.show(`已记录使用，次均 ${formatCurrency(newCostPerUse, currencySymbol)}`, 'success');
+          }
+        } else {
+          toast.show(`已记录使用，次均 ${formatCurrency(newCostPerUse, currencySymbol)}`, 'success');
+        }
+      }
+    } catch (err) {
+      toast.show(`记录失败: ${(err as Error).message}`, 'error');
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -168,14 +228,17 @@ export default function AssetsScreen() {
               </View>
               {items.map(asset => {
                 const cost = costMap.get(asset.id);
+                const usage = usageMap.get(asset.id);
                 return (
                   <AssetCardItem
                     key={asset.id}
                     asset={asset}
                     cost={cost}
+                    usage={usage}
                     currencySymbol={currencySymbol}
                     onPress={() => setDetailAsset(asset)}
                     onLongPress={() => setDeleteTarget(asset)}
+                    onPlusOne={() => handleUsagePlusOne(asset.id)}
                   />
                 );
               })}
@@ -216,12 +279,14 @@ export default function AssetsScreen() {
 
 // ── Asset Card Item ──
 
-function AssetCardItem({ asset, cost, currencySymbol, onPress, onLongPress }: {
+function AssetCardItem({ asset, cost, usage, currencySymbol, onPress, onLongPress, onPlusOne }: {
   asset: Asset;
   cost?: HoldingCostResult;
+  usage?: UsageResult;
   currencySymbol: string;
   onPress: () => void;
   onLongPress: () => void;
+  onPlusOne: () => void;
 }) {
   const theme = useAppTheme();
   const isActive = asset.status === AssetStatus.ACTIVE;
@@ -231,6 +296,7 @@ function AssetCardItem({ asset, cost, currencySymbol, onPress, onLongPress }: {
   const iconName = ASSET_CATEGORY_ICONS[asset.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
 
   const statusColor = AssetStatusColors[asset.status];
+  const hasUsage = usage && isFinite(usage.costPerUse);
 
   return (
     <AppCard onPress={onPress} onLongPress={onLongPress} style={styles.assetCard}>
@@ -260,19 +326,62 @@ function AssetCardItem({ asset, cost, currencySymbol, onPress, onLongPress }: {
         </View>
       </View>
 
-      {isActive && cost ? (
+      {isActive ? (
         <View style={[styles.cardFooter, { borderTopColor: theme.colors.outline }]}>
-          <View style={styles.costInfo}>
-            <Text style={[styles.costMonthly, { color: theme.colors.primary }]}>
-              {formatCurrency(cost.monthlyTotal, currencySymbol)}/月
-            </Text>
-            <Text style={[styles.costDaily, { color: theme.colors.onSurfaceVariant }]}>
-              ≈ {formatCurrency(cost.dailyAverage, currencySymbol)}/天
-            </Text>
-          </View>
-          <Text style={[styles.heldDuration, { color: theme.colors.onSurfaceVariant }]}>
-            {months}个月
-          </Text>
+          {asset.usageTracking ? (
+            <>
+              {/* Row 1: Hero — cost-per-use + [+1] button */}
+              <View style={styles.footerRow1}>
+                <Text style={[
+                  styles.heroNumber,
+                  { color: usage?.isNeglected ? theme.colors.warning : theme.colors.primary },
+                ]}>
+                  {hasUsage ? `次均 ${formatCurrency(usage!.costPerUse, currencySymbol)}` : '从未使用'}
+                </Text>
+                <TouchableOpacity
+                  onPress={onPlusOne}
+                  style={[styles.plusOneBtn, { backgroundColor: theme.colors.primaryContainer }]}
+                  activeOpacity={0.6}
+                >
+                  <Icon name="Plus" size={18} color="primary" />
+                </TouchableOpacity>
+              </View>
+              {/* Row 2: Secondary — holding cost + usage count */}
+              <View style={styles.footerRow2}>
+                {cost ? (
+                  <Text style={[styles.secondaryInfo, { color: theme.colors.onSurfaceVariant }]}>
+                    {formatCurrency(cost.monthlyTotal, currencySymbol)}/月 · ≈{formatCurrency(cost.dailyAverage, currencySymbol)}/天
+                    {usage && usage.useCount > 0 ? ` · 已用 ${usage.useCount} 次` : ''}
+                  </Text>
+                ) : (
+                  <Text style={[styles.secondaryInfo, { color: theme.colors.onSurfaceVariant }]}>
+                    {months}个月
+                  </Text>
+                )}
+                {usage?.isNeglected && (
+                  <Text style={[styles.neglectTag, { color: theme.colors.warning }]}>闲置 {usage.daysSinceLastUse} 天</Text>
+                )}
+              </View>
+            </>
+          ) : (
+            /* No usage tracking — classic footer */
+            <View style={styles.footerRow1}>
+              {cost ? (
+                <View style={styles.costInfo}>
+                  <Text style={[styles.heroNumber, { color: theme.colors.primary }]}>
+                    {formatCurrency(cost.monthlyTotal, currencySymbol)}/月
+                  </Text>
+                  <Text style={[styles.secondaryInfo, { color: theme.colors.onSurfaceVariant }]}>
+                    ≈ {formatCurrency(cost.dailyAverage, currencySymbol)}/天
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[styles.secondaryInfo, { color: theme.colors.onSurfaceVariant }]}>
+                  {months}个月
+                </Text>
+              )}
+            </View>
+          )}
         </View>
       ) : null}
     </AppCard>
@@ -304,9 +413,15 @@ const styles = StyleSheet.create({
   cardRight: { alignItems: 'flex-end' },
   valuationAmount: { fontSize: 18, fontWeight: '700' },
   changeText: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  cardFooter: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  // Tracking ON: hero number + +1 button
+  footerRow1: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroNumber: { fontSize: 17, fontWeight: '700' },
+  plusOneBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  // Tracking ON: secondary info line
+  footerRow2: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
+  secondaryInfo: { fontSize: 12 },
+  neglectTag: { fontSize: 12, fontWeight: '600' },
+  // Tracking OFF: classic footer
   costInfo: { flexDirection: 'row', gap: 12 },
-  costMonthly: { fontSize: 15, fontWeight: '700' },
-  costDaily: { fontSize: 13 },
-  heldDuration: { fontSize: 12 },
 });

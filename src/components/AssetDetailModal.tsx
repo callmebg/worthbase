@@ -17,10 +17,13 @@ import {
 import { useAppTheme } from '@/utils/format';
 import { useAssetStore } from '@/stores/asset-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { AssetRepository } from '@/db/asset-repository';
 import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
 import { SettlementCalculator } from '@/engine/SettlementCalculator';
 import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
 import { MaintenanceRepository } from '@/db/maintenance-repository';
+import { UsageRepository } from '@/db/usage-repository';
+import { UsageCalculator } from '@/engine/UsageCalculator';
 import { HoldingCostBreakdown } from './HoldingCostBreakdown';
 import { ValuationChart } from './ValuationChart';
 import { SettlementModal } from './SettlementModal';
@@ -33,7 +36,7 @@ import {
   AssetCategoryLabels,
 } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
-import type { Asset, HoldingCostResult, RecurringExpense, MaintenanceRecord, SettlementResult } from '@/types/models';
+import type { Asset, HoldingCostResult, RecurringExpense, MaintenanceRecord, SettlementResult, UsageRecord, UsageResult } from '@/types/models';
 import { formatCurrency, formatDate, getCurrentDate, getCurrentMonth, getMonthsHeld, formatDuration } from '@/utils/format';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppButton } from '@/components/ui/Button';
@@ -83,6 +86,15 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   const [maintenanceDate, setMaintenanceDate] = useState(getCurrentDate());
   const [maintenanceAmortize, setMaintenanceAmortize] = useState(true);
 
+  // Usage tracking state
+  const [usageRecords, setUsageRecords] = useState<UsageRecord[]>([]);
+  const [usageResult, setUsageResult] = useState<UsageResult | null>(null);
+  const [deleteUsageTarget, setDeleteUsageTarget] = useState<UsageRecord | null>(null);
+  const [trackingEnabled, setTrackingEnabled] = useState(false);
+
+  // Sync local tracking state when asset changes
+  useEffect(() => { setTrackingEnabled(asset?.usageTracking ?? false); }, [asset?.id, asset?.usageTracking]);
+
   const loadData = useCallback(async () => {
     if (!asset) return;
     setLoading(true);
@@ -91,6 +103,9 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
       setHoldingCost(hc);
       setRecurring(await RecurringExpenseRepository.getByAsset(asset.id));
       setMaintenance(await MaintenanceRepository.getByAsset(asset.id));
+      // Usage data
+      setUsageRecords(await UsageRepository.getByAssetRecent(asset.id));
+      setUsageResult(await UsageCalculator.calculate(asset));
       if (asset.status === AssetStatus.SOLD) {
         const s = await SettlementCalculator.calculate(asset);
         setSettlement(s);
@@ -178,6 +193,70 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
       await MaintenanceRepository.delete(deleteMaintenanceTarget.id);
       setDeleteMaintenanceTarget(null);
       await loadData(); await loadAssets();
+    } catch (err) {
+      toast.show(`删除失败: ${(err as Error).message}`, 'error');
+    }
+  };
+
+  const handleToggleUsageTracking = async (enabled: boolean) => {
+    if (!asset) return;
+    setTrackingEnabled(enabled); // Immediate UI feedback
+    try {
+      await AssetRepository.update(asset.id, { usageTracking: enabled });
+      await loadAssets();
+      await loadData();
+    } catch (err) {
+      setTrackingEnabled(!enabled); // Rollback on error
+      toast.show(`更新失败: ${(err as Error).message}`, 'error');
+    }
+  };
+
+  const handleUsagePlusOne = async () => {
+    if (!asset) return;
+    // Prevent duplicate on the same day
+    const today = new Date().toISOString().substring(0, 10);
+    const lastUsed = await UsageRepository.getLastUsed(asset.id);
+    if (lastUsed === today) {
+      toast.show('今天已经记录过了', 'info');
+      return;
+    }
+
+    // Haptic feedback — gracefully degrade if unavailable
+    try {
+      const Haptics = require('expo-haptics');
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    try {
+      const newUseCount = (usageResult?.useCount ?? 0) + 1;
+      await UsageRepository.create({
+        assetId: asset.id,
+        usedAt: today,
+        note: null,
+      });
+      await loadData();
+
+      // Milestone celebration
+      const oldCostPerUse = usageResult?.costPerUse ?? Infinity;
+      const newCostPerUse = asset.purchasePrice / newUseCount;
+      const milestones = [500, 200, 100, 50];
+      for (const threshold of milestones) {
+        if (oldCostPerUse >= threshold && newCostPerUse < threshold) {
+          toast.show(`🎉 次均成本突破 ¥${threshold}！`, 'success', 3000);
+          return;
+        }
+      }
+      toast.show(`已记录使用，次均 ${formatCurrency(newCostPerUse, currencySymbol)}`, 'success');
+    } catch (err) {
+      toast.show(`记录失败: ${(err as Error).message}`, 'error');
+    }
+  };
+
+  const handleDeleteUsage = async () => {
+    if (!deleteUsageTarget) return;
+    try {
+      await UsageRepository.delete(deleteUsageTarget.id);
+      setDeleteUsageTarget(null);
+      await loadData();
     } catch (err) {
       toast.show(`删除失败: ${(err as Error).message}`, 'error');
     }
@@ -321,6 +400,111 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
           )}
         </View>
 
+        {/* Usage Records (cost-per-use tracking) */}
+        {isActive && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>使用追踪</Text>
+              <Switch
+                value={trackingEnabled}
+                onValueChange={handleToggleUsageTracking}
+                trackColor={{ false: theme.colors.outline, true: theme.colors.primary }}
+              />
+            </View>
+
+            {trackingEnabled ? (
+              <>
+                {/* Stats Card */}
+                <View style={[styles.usageStatsCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+                  <View style={styles.usageStatsRow}>
+                    <View style={styles.usageStat}>
+                      <Text style={[styles.usageStatValue, { color: theme.colors.primary }]}>
+                        {usageResult && isFinite(usageResult.costPerUse)
+                          ? formatCurrency(usageResult.costPerUse, currencySymbol)
+                          : '--'}
+                      </Text>
+                      <Text style={[styles.usageStatLabel, { color: theme.colors.onSurfaceVariant }]}>次均成本</Text>
+                    </View>
+                    <View style={styles.usageStat}>
+                      <Text style={[styles.usageStatValue, { color: theme.colors.onSurface }]}>
+                        {usageResult?.useCount ?? 0} 次
+                      </Text>
+                      <Text style={[styles.usageStatLabel, { color: theme.colors.onSurfaceVariant }]}>使用次数</Text>
+                    </View>
+                    <View style={styles.usageStat}>
+                      <Text style={[styles.usageStatValue, { color: theme.colors.onSurface }]}>
+                        {usageResult?.lastUsedAt
+                          ? `${usageResult.daysSinceLastUse}天前`
+                          : '从未使用'}
+                      </Text>
+                      <Text style={[styles.usageStatLabel, { color: theme.colors.onSurfaceVariant }]}>上次使用</Text>
+                    </View>
+                  </View>
+                  {usageResult && usageResult.recentUseCount > 0 && (
+                    <Text style={[styles.usageRecent, { color: theme.colors.tertiary }]}>
+                      最近30天使用了 {usageResult.recentUseCount} 次
+                    </Text>
+                  )}
+                </View>
+
+                {/* +1 Button */}
+                <AppButton
+                  title="+1 使用"
+                  variant="primary"
+                  icon="Plus"
+                  onPress={handleUsagePlusOne}
+                  style={styles.usagePlusBtn}
+                />
+
+                {/* Cost-per-use trend */}
+                {usageRecords.length >= 2 && (() => {
+                  const reversed = [...usageRecords].reverse();
+                  const points = reversed.map((_, i) => {
+                    const count = i + 1;
+                    return formatCurrency(asset.purchasePrice / count, currencySymbol);
+                  });
+                  const display = points.length <= 6 ? points : [
+                    points[0],
+                    ...points.filter((_: string, i: number) =>
+                      i > 0 && i < points.length - 1 &&
+                      (points.length <= 6 || i % Math.ceil((points.length - 2) / 4) === 0)
+                    ).slice(0, 4),
+                    points[points.length - 1],
+                  ];
+                  return (
+                    <Text style={[styles.usageTrend, { color: theme.colors.tertiary }]}>
+                      次均成本变化: {display.join(' → ')}
+                    </Text>
+                  );
+                })()}
+
+                {/* History list */}
+                {usageRecords.length > 0 ? (
+                  <View style={styles.usageHistoryList}>
+                    {usageRecords.map(r => (
+                      <View key={r.id} style={[styles.subRow, { borderBottomColor: theme.colors.outline }]}>
+                        <Icon name="CheckCircle" size={16} color="success" />
+                        <Text style={[styles.subName, { color: theme.colors.onSurface }]}>
+                          {formatDate(r.usedAt)}
+                        </Text>
+                        <AppButton title="✕" variant="text" compact onPress={() => setDeleteUsageTarget(r)} />
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={[styles.emptySubtext, { color: theme.colors.tertiary }]}>
+                    还没记录过使用，点上方按钮记录第一次吧
+                  </Text>
+                )}
+              </>
+            ) : (
+              <Text style={[styles.emptySubtext, { color: theme.colors.tertiary }]}>
+                开启后可在资产卡片上一键记录使用次数，追踪次均成本。
+              </Text>
+            )}
+          </View>
+        )}
+
         {/* Maintenance Records */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -446,6 +630,16 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
         icon="Trash2"
         variant="danger"
       />
+      <ConfirmSheet
+        visible={!!deleteUsageTarget}
+        onClose={() => setDeleteUsageTarget(null)}
+        onConfirm={handleDeleteUsage}
+        title="删除使用记录"
+        description={deleteUsageTarget ? `确定要删除 ${formatDate(deleteUsageTarget.usedAt)} 的使用记录吗？` : undefined}
+        confirmLabel="删除"
+        icon="Trash2"
+        variant="danger"
+      />
     </AppBottomSheet>
   );
 }
@@ -524,4 +718,14 @@ const styles = StyleSheet.create({
   valTitle: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
   valSubtitle: { fontSize: 14, marginBottom: 16 },
   valActions: { flexDirection: 'row', gap: 12 },
+  // Usage section
+  usageStatsCard: { borderRadius: radius.md, padding: 16, marginBottom: 12 },
+  usageStatsRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  usageStat: { alignItems: 'center' },
+  usageStatValue: { fontSize: 18, fontWeight: '700' },
+  usageStatLabel: { fontSize: 12, marginTop: 2 },
+  usageRecent: { fontSize: 12, textAlign: 'center', marginTop: 10 },
+  usagePlusBtn: { marginBottom: 12 },
+  usageTrend: { fontSize: 12, marginBottom: 12, fontStyle: 'italic', paddingHorizontal: 4 },
+  usageHistoryList: { marginTop: 4 },
 });

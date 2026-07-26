@@ -28,16 +28,18 @@ import { ProjectionCalculator } from '@/engine/ProjectionCalculator';
 import type { ProjectionDetail } from '@/engine/ProjectionCalculator';
 import { GoalProjectionExplainer } from '@/components/GoalProjectionExplainer';
 import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
+import { UsageCalculator } from '@/engine/UsageCalculator';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
 import { spacing, radius } from '@/theme/tokens';
-import type { NetWorthResult, ValuationHistory } from '@/types/models';
+import type { NetWorthResult, ValuationHistory, UsageResult, UsageNeglect } from '@/types/models';
 import { formatCurrency, formatCompactCurrency } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
+import { useToast } from '@/hooks/useToast';
 import { Settings } from 'lucide-react-native';
 import { OnboardingView } from '@/components/OnboardingView';
 import { TimeRangeSheet, type TimeRangeState, type TimeRangePreset } from '@/components/TimeRangeSheet';
@@ -47,6 +49,29 @@ import { AppTextInput } from '@/components/ui/TextInput';
 import { AppButton } from '@/components/ui/Button';
 
 const screenWidth = Dimensions.get('window').width;
+
+const FORTUNES = [
+  '💰 钱会流向重视它的人',
+  '📈 今天的净值比昨天高，就是好日子',
+  '🏠 你拥有的东西，也在拥有你',
+  '✨ 少买一件，多用一次，快乐加倍',
+  '🎯 净资产目标，每天都在靠近',
+  '💸 不记账的人不知道自己多有钱',
+  '🔮 被动收入 = 自由的基础',
+  '🌱 小钱不理，大钱不来',
+  '💎 真正的奢侈是用得够久',
+  '🚀 复利是世界的第八大奇迹',
+  '🧘 资产是数字，心安才是净值',
+  '🪷 买之前想三秒，买了就用回本',
+  '🎉 每一块钱都有它的使命',
+  '📊 趋势比数字重要，习惯比趋势重要',
+  '🏆 你在管理财富，不是财富在管理你',
+  '🌟 最值钱的资产是你自己',
+  '🦋 记账不是为了焦虑，是为了自由',
+  '🍀 好运偏爱有准备的钱包',
+  '⚡ 天天看净值，日日有进步',
+  '🌈 财务自由从了解自己有多少钱开始',
+];
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -70,6 +95,7 @@ export default function DashboardScreen() {
   const { accounts, balances, loadAccounts } = useAccountStore();
   const { assets, loadAssets } = useAssetStore();
   const { netWorthGoal, currencySymbol, update } = useSettingsStore();
+  const toast = useToast();
 
   const [netWorth, setNetWorth] = useState<NetWorthResult | null>(null);
   const [totalMonthlyCost, setTotalMonthlyCost] = useState(0);
@@ -87,6 +113,11 @@ export default function DashboardScreen() {
   const [showProjectionExplainer, setShowProjectionExplainer] = useState(false);
   const [showGoalSheet, setShowGoalSheet] = useState(false);
   const [goalInput, setGoalInput] = useState('');
+
+  // Usage/cost-per-use state
+  const [usageMap, setUsageMap] = useState<Map<string, UsageResult>>(new Map());
+  const [neglectedItems, setNeglectedItems] = useState<UsageNeglect[]>([]);
+  const [usageTab, setUsageTab] = useState<'expensive' | 'neglected'>('expensive');
 
   // Lock to landscape when fullscreen chart is open
   useEffect(() => {
@@ -117,6 +148,12 @@ export default function DashboardScreen() {
       };
     }).filter(b => b.cost > 0).sort((a, b) => b.cost - a.cost);
     setCostBreakdown(breakdown);
+
+    // Usage data for cost-per-use dashboard insights
+    const usageResults = await UsageCalculator.calculateAll(activeAssets);
+    setUsageMap(usageResults);
+    const neglected = await UsageCalculator.getNeglected(activeAssets);
+    setNeglectedItems(neglected);
 
     // Category breakdown for visualization
     const catMap = new Map<string, number>();
@@ -247,10 +284,11 @@ export default function DashboardScreen() {
     return <OnboardingView />;
   }
 
-  const onRefresh = async () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    const fortune = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+    toast.show(fortune, 'success', 2500);
+    setTimeout(() => setRefreshing(false), 400);
   };
 
   const progress = netWorthGoal ? Math.min(100, (netWorth?.netWorth ?? 0) / netWorthGoal * 100) : 0;
@@ -513,6 +551,113 @@ export default function DashboardScreen() {
           </View>
         )}
       </AppCard>
+
+      {/* ── Cost-Per-Use Insights ── */}
+      {assets.filter(a => a.status === AssetStatus.ACTIVE).length > 0 && (
+        <AppCard style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>
+            次均成本洞察
+          </Text>
+
+          {/* Tab toggle */}
+          <View style={styles.usageTabRow}>
+            <AppChip
+              label="最贵单次"
+              selected={usageTab === 'expensive'}
+              onPress={() => setUsageTab('expensive')}
+            />
+            <AppChip
+              label={`闲置提醒${neglectedItems.length > 0 ? ` (${neglectedItems.length})` : ''}`}
+              selected={usageTab === 'neglected'}
+              onPress={() => setUsageTab('neglected')}
+            />
+          </View>
+
+          {/* Expensive tab: top 3 highest cost-per-use */}
+          {usageTab === 'expensive' && (
+            <View style={styles.usageList}>
+              {(() => {
+                const activeAssets = assets.filter(a => a.status === AssetStatus.ACTIVE);
+                const ranked = activeAssets
+                  .map(a => ({ asset: a, usage: usageMap.get(a.id) }))
+                  .filter(({ usage }) => usage && usage.useCount > 0)
+                  .sort((a, b) => (b.usage?.costPerUse ?? 0) - (a.usage?.costPerUse ?? 0))
+                  .slice(0, 3);
+
+                if (ranked.length === 0) {
+                  return (
+                    <Text style={[styles.usageEmpty, { color: theme.colors.tertiary }]}>
+                      还没有使用记录，去资产页记录第一次使用吧
+                    </Text>
+                  );
+                }
+
+                return ranked.map(({ asset, usage }, i) => {
+                  const iconName = ASSET_CATEGORY_ICONS[asset.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
+                  return (
+                    <View key={asset.id} style={[styles.usageRow, i < ranked.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.outline }]}>
+                      <Icon name={iconName} size={20} color="primary" />
+                      <Text style={[styles.usageName, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                        {asset.name}
+                      </Text>
+                      <View style={styles.usageRight}>
+                        <Text style={[styles.usageCostPerUse, { color: theme.colors.primary }]}>
+                          次均 {formatCurrency(usage!.costPerUse, currencySymbol)}
+                        </Text>
+                        <Text style={[styles.usageCount, { color: theme.colors.onSurfaceVariant }]}>
+                          用了{usage!.useCount}次
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                });
+              })()}
+            </View>
+          )}
+
+          {/* Neglected tab: items unused 90+ days */}
+          {usageTab === 'neglected' && (
+            <View style={styles.usageList}>
+              {neglectedItems.length === 0 ? (
+                <Text style={[styles.usageEmpty, { color: theme.colors.tertiary }]}>
+                  所有物品都在活跃使用中 🎉
+                </Text>
+              ) : (
+                neglectedItems.map((item, i) => {
+                  const iconName = ASSET_CATEGORY_ICONS[item.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
+                  return (
+                    <View key={item.assetId} style={[styles.usageRow, i < neglectedItems.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.outline }]}>
+                      <Icon name={iconName} size={20} color="warning" />
+                      <View style={styles.usageNameWrap}>
+                        <Text style={[styles.usageName, { color: theme.colors.onSurface }]} numberOfLines={1}>
+                          {item.assetName}
+                        </Text>
+                        <Text style={[styles.usageNeglectDays, { color: theme.colors.warning }]}>
+                          闲置 {item.daysSinceLastUse} 天
+                        </Text>
+                      </View>
+                      {isFinite(item.costPerUse) && (
+                        <Text style={[styles.usageCostPerUse, { color: theme.colors.warning }]}>
+                          次均 {formatCurrency(item.costPerUse, currencySymbol)}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={() => router.push('/assets')}
+            style={styles.viewAllBtn}
+          >
+            <Text style={{ color: theme.colors.primary, fontSize: 14 }}>
+              查看全部资产 →
+            </Text>
+          </TouchableOpacity>
+        </AppCard>
+      )}
 
     </ScrollView>
 
@@ -779,4 +924,15 @@ const styles = StyleSheet.create({
   customRangeBar: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   fsCustomRange: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   fsCustomRangeText: { fontSize: 13, fontWeight: '600' },
+  // Cost-per-use insight card
+  usageTabRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm + spacing.xs },
+  usageList: { marginTop: spacing.xs },
+  usageRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: spacing.sm },
+  usageName: { flex: 1, fontSize: 14 },
+  usageNameWrap: { flex: 1 },
+  usageRight: { alignItems: 'flex-end' },
+  usageCostPerUse: { fontSize: 14, fontWeight: '700' },
+  usageCount: { fontSize: 11 },
+  usageNeglectDays: { fontSize: 12, marginTop: 2 },
+  usageEmpty: { fontSize: 13, paddingVertical: spacing.sm + spacing.xs, textAlign: 'center' },
 });

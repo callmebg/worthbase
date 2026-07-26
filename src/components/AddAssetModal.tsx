@@ -70,6 +70,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const [residualValue, setResidualValue] = useState('');
   const [valuationTracking, setValuationTracking] = useState(false);
   const [currentValuation, setCurrentValuation] = useState('');
+  const [usageTracking, setUsageTracking] = useState(false);
 
   // Step 3 fields
   const [recurringExpenses, setRecurringExpenses] = useState<DraftRecurring[]>([]);
@@ -176,6 +177,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       setResidualValue(editAsset.residualValue ? String(editAsset.residualValue) : '');
       setValuationTracking(editAsset.valuationTracking);
       setCurrentValuation(editAsset.currentValuation ? String(editAsset.currentValuation) : '');
+      setUsageTracking(editAsset.usageTracking);
 
       // Load existing recurring expenses and maintenance records with their IDs
       (async () => {
@@ -235,6 +237,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         residualValue: residualValue ? parseFloat(residualValue) : null,
         valuationTracking,
         currentValuation: currentValuation ? parseFloat(currentValuation) : (valuationTracking ? parseFloat(purchasePrice) || null : null),
+        usageTracking,
         weightGrams: category === AssetCategory.PRECIOUS_METAL && weightGrams.trim() ? parseFloat(weightGrams) : null,
         imagePath: null,
         sellDate: null,
@@ -351,6 +354,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         residualValue: null,
         valuationTracking: false,
         currentValuation: null,
+        usageTracking: false,
         weightGrams: category === AssetCategory.PRECIOUS_METAL && weightGrams.trim() ? parseFloat(weightGrams) : null,
         imagePath: null,
         sellDate: null,
@@ -606,6 +610,18 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
                 keyboardType="decimal-pad"
               />
             )}
+
+            <View style={styles.switchRow}>
+              <View>
+                <Text style={[styles.switchLabel, { color: theme.colors.onSurface }]}>使用追踪</Text>
+                <Text style={{ fontSize: 12, color: theme.colors.tertiary, marginTop: 2 }}>记录使用次数，计算次均成本</Text>
+              </View>
+              <Switch
+                value={usageTracking}
+                onValueChange={setUsageTracking}
+                trackColor={{ false: theme.colors.outline, true: theme.colors.primary }}
+              />
+            </View>
           </>
         )}
 

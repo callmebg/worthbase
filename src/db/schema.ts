@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS assets (
   residual_value REAL,
   valuation_tracking INTEGER NOT NULL DEFAULT 0,
   current_valuation REAL,
+  usage_tracking INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active',
   sell_date TEXT,
   sell_price REAL,
@@ -86,6 +87,16 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY NOT NULL,
   value TEXT NOT NULL
 );
+
+-- 使用记录表 (cost-per-use tracking)
+CREATE TABLE IF NOT EXISTS usage_records (
+  id TEXT PRIMARY KEY NOT NULL,
+  asset_id TEXT NOT NULL,
+  used_at TEXT NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
 `;
 
 /** Performance indexes */
@@ -108,4 +119,8 @@ CREATE INDEX IF NOT EXISTS idx_valuation_asset_date ON valuation_history(asset_i
 -- 资产：按状态和分类查询
 CREATE INDEX IF NOT EXISTS idx_assets_status ON assets(status);
 CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category);
+
+-- 使用记录：按资产和日期查询
+CREATE INDEX IF NOT EXISTS idx_usage_asset_date ON usage_records(asset_id, used_at);
+CREATE INDEX IF NOT EXISTS idx_usage_used_at ON usage_records(used_at);
 `;

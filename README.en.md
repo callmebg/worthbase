@@ -34,7 +34,7 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 ## Features
 
 ### Account Balance Management
-- Supports 6 account types: WeChat Pay, Alipay, bank cards, cash, funds, and other
+- Supports 8 account types: WeChat Pay, Alipay, bank cards, cash, funds, credit cards, loans, and other
 - Periodic manual balance updates, each saved as a snapshot
 - Multi-account balance summary with one-tap total
 
@@ -44,7 +44,7 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 - Net worth goal setting with progress bar visualization
 
 ### Physical Asset Management
-- 8 asset categories: Vehicles, Real Estate, Electronics, Digital, Furniture, Appliances, Luxury, Other
+- 8 asset categories: Vehicles, Real Estate, Electronics, Digital, Home, Luxury, Precious Metals, Other
 - Full asset lifecycle: In Use → Retired / Sold
 - Valuation tracking with optional history curve
 - Sell settlement: auto-calculates purchase price, sell price, depreciation, cumulative holding cost, net spend, daily cost
@@ -65,6 +65,20 @@ Holding cost = Depreciation + Recurring expenses (active items for current month
 - **One-time maintenance**: Repairs, servicing — optionally included in cost allocation
 - **Monthly & daily views**: See both monthly holding cost and daily cost
 - **Summary panel**: Total monthly holding cost across all assets
+
+### Cost-Per-Use Tracking (New in v1.4)
+Give every use a sense of value:
+
+- **One-tap recording**: Both asset cards and detail pages have a `+1` button — one tap records a use, no forms needed. Limited to once per day per item to prevent spam
+- **Per-asset toggle**: Individual on/off switch per asset, off by default — no clutter for items that don't need per-use tracking
+- **Cost per use = Purchase Price ÷ Times Used**: The lower it goes, the more value you've gotten
+- **Neglect alerts**: Items unused 90+ days are flagged with a warning color — gentle nudge to use or sell
+- **Milestone celebrations**: Auto 🎉 toast when cost-per-use drops below ¥500 / ¥200 / ¥100 / ¥50
+- **Usage history**: Detail page shows a timeline of usage records and declining cost-per-use trend
+- **Dashboard insights**: "Cost-Per-Use Insights" card on the dashboard — most expensive per-use vs. neglected items at a glance
+- **Pull-to-refresh easter egg**: Pull down on dashboard for a random financial fortune
+
+> 💡 Perfect for those "fancy things you buy but don't use often" — every use feels like earning money back, encouraging more use or helping you decide to sell.
 
 <p align="center">
   <img src="./docs/screenshots/calc.jpg" alt="Holding cost calculation" width="200">
@@ -238,13 +252,14 @@ worthbase/
 │   │   ├── OnboardingView.tsx  #   First-run onboarding
 │   │   └── LockScreen.tsx      #   App lock screen
 │   ├── db/                     # Database layer (SQLite)
-│   │   ├── schema.ts           #   7 tables + indexes
+│   │   ├── schema.ts           #   8 tables + indexes
 │   │   ├── client.ts           #   SQLite connection
 │   │   ├── migrations.ts       #   Migration management
 │   │   └── *-repository.ts     #   Per-table Repository (CRUD)
 │   ├── engine/                 # Calculation engine (strategy pattern)
 │   │   ├── strategies/         #   4 depreciation strategy implementations
 │   │   ├── HoldingCostCalculator.ts       # Holding cost aggregation
+│   │   ├── UsageCalculator.ts              # Cost-per-use calculation
 │   │   ├── NetWorthCalculator.ts          # Net worth calculation
 │   │   ├── SettlementCalculator.ts        # Sell settlement
 │   │   ├── RecurringExpenseCalculator.ts  # Recurring expense intervals
@@ -282,13 +297,17 @@ worthbase/
 │  │ Depreciation│  │ Recurring    │  │ Maintenance │ │
 │  │ (4 impls)   │  │ (intervals)  │  │ (alloc.)    │ │
 │  └─────────────┘  └──────────────┘  └────────────┘ │
+│  ┌─────────────┐                                    │
+│  │ CostPerUse   │  ← New in v1.4                    │
+│  │ UsageCalc    │                                    │
+│  └─────────────┘                                    │
 │  Holding cost = Depreciation + Recurring + Maint.    │
 ├─────────────────────────────────────────────────────┤
 │                   Data Layer                         │
 │  src/db/ (expo-sqlite)                               │
-│  7 tables: accounts · balance_snapshots · assets ·   │
-│  recurring_expenses · maintenance_records ·          │
-│  valuation_history · settings                        │
+│  8 tables (schema v7): accounts · balance_snapshots ·│
+│  assets · recurring_expenses · maintenance_records · │
+│  valuation_history · usage_records · settings        │
 └─────────────────────────────────────────────────────┘
 ```
 

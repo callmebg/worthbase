@@ -48,6 +48,8 @@ export interface Asset {
   valuationTracking: boolean;
   /** Current estimated valuation */
   currentValuation: number | null;
+  /** Whether cost-per-use tracking is enabled */
+  usageTracking: boolean;
   /** Asset lifecycle status */
   status: AssetStatus;
   /** Sell date (set when status becomes SOLD) */
@@ -95,6 +97,15 @@ export interface ValuationHistory {
   assetId: string;
   valuation: number;
   recordedDate: string; // ISO 8601 date
+}
+
+/** 使用记录 - a single usage event for cost-per-use tracking */
+export interface UsageRecord {
+  id: string;
+  assetId: string;
+  usedAt: string; // ISO 8601 date (YYYY-MM-DD)
+  note: string | null;
+  createdAt: string; // ISO 8601
 }
 
 /** 应用设置 - key-value settings store */
@@ -167,6 +178,31 @@ export interface NetWorthTrendPoint {
   liquidAssets: number;
   assetValuations: number;
   netWorth: number;
+}
+
+/** 次均成本计算结果 */
+export interface UsageResult {
+  /** Total number of uses recorded */
+  useCount: number;
+  /** costPerUse = purchasePrice / useCount (Infinity if useCount=0) */
+  costPerUse: number;
+  /** Date of last use, null if never used */
+  lastUsedAt: string | null;
+  /** Days since last use (or days since purchase if never used) */
+  daysSinceLastUse: number;
+  /** True if unused for 90+ days (or never used and owned 90+ days) */
+  isNeglected: boolean;
+  /** Usage count in last 30 days */
+  recentUseCount: number;
+}
+
+/** 闲置提醒条目 */
+export interface UsageNeglect {
+  assetId: string;
+  assetName: string;
+  category: string;
+  daysSinceLastUse: number;
+  costPerUse: number;
 }
 
 // ──────────────────────────────────────────────

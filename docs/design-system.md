@@ -1,6 +1,6 @@
 # WorthBase（家底）设计系统文档
 
-> 版本 1.3.1 · 最后更新：2026-07-15
+> 版本 1.4.1 · 最后更新：2026-07-26
 
 ---
 
@@ -858,7 +858,7 @@ import { AppListItem } from '@/components/ui';
   title="当前版本"
   icon="Info"
   rightElement="text"
-  rightText="v1.3.1"
+  rightText="v1.4.1"
 />
 
 // 自定义右侧元素

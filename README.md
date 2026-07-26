@@ -71,6 +71,20 @@
 - **月/日双视角**：同时展示月持有成本和日均持有成本
 - **汇总面板**：所有资产月持有成本总计，直观展示"养你所有的东西要多少钱"
 
+### 次均成本追踪（v1.4 新增）
+用「使用次数」给每次使用赋予价值感：
+
+- **一键记录**：资产卡片和详情页都有 `+1` 按钮，点一下就算一次使用，无需填表。每天每件物品限一次，防止误触
+- **按需开启**：每个资产独立开关，默认关闭——房子沙发类不需要次均追踪的不打扰
+- **次均成本 = 购买价格 ÷ 使用次数**：每次使用成本越低，说明买得越值
+- **闲置提醒**：90 天以上未使用的物品自动标黄，提醒"该用用了"或"不如卖了回血"
+- **里程碑庆祝**：次均成本跌破 ¥500 / ¥200 / ¥100 / ¥50 时自动 🎉 提示
+- **使用历史**：详情页展示使用记录时间线和次均成本下降趋势
+- **仪表盘洞察**：首页"次均成本洞察"卡片，一眼看到最贵单次 vs 闲置物品
+- **下拉彩蛋**：总览页下拉随机显示理财吉祥话
+
+> 💡 特别适合那些"频率不高但又买回来的花里胡哨的东西"——用一次回本一次的心理，能提高使用率，也能避免下一次冲动消费。
+
 <p align="center">
   <img src="./docs/screenshots/calc.jpg" alt="持有成本计算" width="200">
   <img src="./docs/screenshots/calc2.jpg" alt="持有成本详情" width="200">
@@ -254,13 +268,14 @@ worthbase/
 │   │   ├── OnboardingView.tsx  #   首次使用引导
 │   │   └── LockScreen.tsx      #   应用锁界面
 │   ├── db/                     # 数据库层
-│   │   ├── schema.ts           #   7 张表建表语句 + 索引
+│   │   ├── schema.ts           #   8 张表建表语句 + 索引
 │   │   ├── client.ts           #   SQLite 连接
 │   │   ├── migrations.ts       #   迁移管理
 │   │   └── *-repository.ts     #   各表 Repository（CRUD）
 │   ├── engine/                 # 计算引擎（策略模式）
 │   │   ├── strategies/         #   4 种分摊策略实现
 │   │   ├── HoldingCostCalculator.ts       # 持有成本汇总
+│   │   ├── UsageCalculator.ts              # 次均成本计算
 │   │   ├── NetWorthCalculator.ts          # 净资产计算
 │   │   ├── SettlementCalculator.ts        # 卖出结算
 │   │   ├── RecurringExpenseCalculator.ts  # 经常性支出区间
@@ -298,13 +313,17 @@ worthbase/
 │  │ 分摊策略     │  │ 经常性支出   │  │ 一次性维护  │ │
 │  │ (4种实现)    │  │ (区间计算)   │  │ (分摊逻辑)  │ │
 │  └─────────────┘  └──────────────┘  └────────────┘ │
+│  ┌─────────────┐                                    │
+│  │ 次均成本     │  ← v1.4 新增                       │
+│  │ UsageCalc    │                                    │
+│  └─────────────┘                                    │
 │  持有成本 = 分摊 + 经常性支出 + 维护分摊               │
 ├─────────────────────────────────────────────────────┤
 │                   数据层                              │
 │  src/db/ (expo-sqlite)                               │
-│  7 张表：accounts · balance_snapshots · assets ·     │
-│  recurring_expenses · maintenance_records ·         │
-│  valuation_history · settings                       │
+│  8 张表 (schema v7)：accounts · balance_snapshots ·  │
+│  assets · recurring_expenses · maintenance_records ·│
+│  valuation_history · usage_records · settings       │
 └─────────────────────────────────────────────────────┘
 ```
 

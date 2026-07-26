@@ -127,7 +127,7 @@ async function seedTestData() {
     name: 'iPhone 15', category: AssetCategory.ELECTRONICS,
     purchaseDate: '2025-01-15', purchasePrice: 7999,
     amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: 24,
-    residualValue: null, valuationTracking: true, currentValuation: 6000,
+    residualValue: null, valuationTracking: true, currentValuation: 6000, usageTracking: false,
     status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
   });
 
@@ -287,7 +287,7 @@ describe('ImportService', () => {
           name: 'New Asset', category: AssetCategory.HOME,
           purchaseDate: '2025-03-01', purchasePrice: 5000,
           amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
-          residualValue: null, valuationTracking: false, currentValuation: null,
+          residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false,
           status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
         },
       ],
