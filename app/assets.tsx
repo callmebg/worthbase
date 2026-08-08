@@ -11,6 +11,7 @@ import {
   FlatList,
   StyleSheet,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { useFocusEffect } from 'expo-router';
@@ -34,10 +35,11 @@ import type { Asset, HoldingCostResult, UsageResult } from '@/types/models';
 import { formatCurrency, formatCompactCurrency, getMonthsHeld } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
-import { AppFAB } from '@/components/ui/FAB';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/hooks/useToast';
+import { FORTUNES } from '@/utils/fortunes';
+import { spacing } from '@/theme/tokens';
 
 type StatusFilter = 'all' | AssetStatus;
 
@@ -52,6 +54,7 @@ export default function AssetsScreen() {
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [costMap, setCostMap] = useState<Map<string, HoldingCostResult>>(new Map());
   const [usageMap, setUsageMap] = useState<Map<string, UsageResult>>(new Map());
+  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(useCallback(() => { loadAssets(); }, []));
 
@@ -143,6 +146,14 @@ export default function AssetsScreen() {
     }
   };
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    const fortune = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+    toast.show(fortune, 'success', 2500);
+    loadAssets();
+    setTimeout(() => setRefreshing(false), 400);
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -213,6 +224,23 @@ export default function AssetsScreen() {
         data={Object.entries(grouped)}
         keyExtractor={([cat]) => cat}
         contentContainerStyle={styles.list}
+        ListFooterComponent={
+          <TouchableOpacity
+            onPress={() => setShowAdd(true)}
+            style={[styles.addBtn, { borderColor: theme.colors.outline }]}
+            activeOpacity={0.7}
+          >
+            <Icon name="Plus" size={18} color={theme.colors.primary} />
+            <Text style={[styles.addBtnLabel, { color: theme.colors.primary }]}>添加资产</Text>
+          </TouchableOpacity>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
         renderItem={({ item: [cat, items] }) => {
           const iconName = ASSET_CATEGORY_ICONS[cat as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
           return (
@@ -256,8 +284,7 @@ export default function AssetsScreen() {
         }
       />
 
-      {/* FAB */}
-      <AppFAB icon="Plus" label="添加资产" onPress={() => setShowAdd(true)} />
+      {/* Add asset button is at the bottom of the list */}
 
       {/* Modals — will be updated in Phase 11 */}
       <AddAssetModal visible={showAdd} onClose={() => setShowAdd(false)} onSaved={() => { loadAssets(); toast.show('资产已保存', 'success'); }} />
@@ -399,7 +426,7 @@ const styles = StyleSheet.create({
   overviewLabel: { fontSize: 12 },
   overviewValue: { fontSize: 20, fontWeight: '700', marginTop: 4 },
   filterRow: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 8 },
-  list: { paddingHorizontal: 16, paddingBottom: 120 },
+  list: { paddingHorizontal: 16, paddingBottom: 24 },
   categoryGroup: { marginBottom: 16 },
   categoryHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, paddingVertical: 4 },
   categoryTitle: { fontSize: 15, fontWeight: '600' },
@@ -424,4 +451,17 @@ const styles = StyleSheet.create({
   neglectTag: { fontSize: 12, fontWeight: '600' },
   // Tracking OFF: classic footer
   costInfo: { flexDirection: 'row', gap: 12 },
+  // Add button
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    marginTop: spacing.sm,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
+  },
+  addBtnLabel: { fontSize: 15, fontWeight: '600' },
 });

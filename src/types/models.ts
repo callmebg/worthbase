@@ -50,6 +50,8 @@ export interface Asset {
   currentValuation: number | null;
   /** Whether cost-per-use tracking is enabled */
   usageTracking: boolean;
+  /** Number of uses before the user started tracking in WorthBase (default 0) */
+  initialUseCount: number;
   /** Asset lifecycle status */
   status: AssetStatus;
   /** Sell date (set when status becomes SOLD) */
@@ -182,9 +184,13 @@ export interface NetWorthTrendPoint {
 
 /** 次均成本计算结果 */
 export interface UsageResult {
-  /** Total number of uses recorded */
+  /** Number of usage records in the app */
   useCount: number;
-  /** costPerUse = purchasePrice / useCount (Infinity if useCount=0) */
+  /** Initial use count set by user (from asset.initialUseCount) */
+  initialUseCount: number;
+  /** Total uses = initialUseCount + useCount */
+  totalUseCount: number;
+  /** costPerUse = purchasePrice / totalUseCount (Infinity if totalUseCount=0) */
   costPerUse: number;
   /** Date of last use, null if never used */
   lastUsedAt: string | null;

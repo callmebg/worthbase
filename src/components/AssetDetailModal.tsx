@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Switch,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { useAssetStore } from '@/stores/asset-store';
@@ -91,6 +92,8 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   const [usageResult, setUsageResult] = useState<UsageResult | null>(null);
   const [deleteUsageTarget, setDeleteUsageTarget] = useState<UsageRecord | null>(null);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
+  const [editingInitialCount, setEditingInitialCount] = useState(false);
+  const [initialCountInput, setInitialCountInput] = useState('');
 
   // Sync local tracking state when asset changes
   useEffect(() => { setTrackingEnabled(asset?.usageTracking ?? false); }, [asset?.id, asset?.usageTracking]);
@@ -211,6 +214,20 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
     }
   };
 
+  const handleSaveInitialCount = async () => {
+    if (!asset) return;
+    const count = parseInt(initialCountInput) || 0;
+    try {
+      await AssetRepository.update(asset.id, { initialUseCount: Math.max(0, count) });
+      setEditingInitialCount(false);
+      setInitialCountInput('');
+      await loadAssets();
+      await loadData();
+    } catch (err) {
+      toast.show(`更新失败: ${(err as Error).message}`, 'error');
+    }
+  };
+
   const handleUsagePlusOne = async () => {
     if (!asset) return;
     // Prevent duplicate on the same day
@@ -227,7 +244,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}
     try {
-      const newUseCount = (usageResult?.useCount ?? 0) + 1;
+      const newTotalUseCount = (usageResult?.totalUseCount ?? 0) + 1;
       await UsageRepository.create({
         assetId: asset.id,
         usedAt: today,
@@ -237,7 +254,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
 
       // Milestone celebration
       const oldCostPerUse = usageResult?.costPerUse ?? Infinity;
-      const newCostPerUse = asset.purchasePrice / newUseCount;
+      const newCostPerUse = asset.purchasePrice / newTotalUseCount;
       const milestones = [500, 200, 100, 50];
       for (const threshold of milestones) {
         if (oldCostPerUse >= threshold && newCostPerUse < threshold) {
@@ -427,9 +444,13 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
                     </View>
                     <View style={styles.usageStat}>
                       <Text style={[styles.usageStatValue, { color: theme.colors.onSurface }]}>
-                        {usageResult?.useCount ?? 0} 次
+                        {usageResult?.totalUseCount ?? 0} 次
                       </Text>
-                      <Text style={[styles.usageStatLabel, { color: theme.colors.onSurfaceVariant }]}>使用次数</Text>
+                      <Text style={[styles.usageStatLabel, { color: theme.colors.onSurfaceVariant }]}>
+                        {usageResult && usageResult.initialUseCount > 0
+                          ? `初始 ${usageResult.initialUseCount} + 记录 ${usageResult.useCount}`
+                          : '使用次数'}
+                      </Text>
                     </View>
                     <View style={styles.usageStat}>
                       <Text style={[styles.usageStatValue, { color: theme.colors.onSurface }]}>
@@ -447,9 +468,39 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
                   )}
                 </View>
 
+                {/* Initial use count editor */}
+                {editingInitialCount ? (
+                  <View style={[styles.initialCountForm, { backgroundColor: theme.colors.surfaceVariant }]}>
+                    <AppTextInput
+                      bottomSheet
+                      label="初始使用次数"
+                      value={initialCountInput}
+                      onChangeText={setInitialCountInput}
+                      placeholder="在开始记录之前已经用了多少次？"
+                      keyboardType="number-pad"
+                      autoFocus
+                    />
+                    <View style={styles.initialCountActions}>
+                      <AppButton title="取消" variant="text" onPress={() => { setEditingInitialCount(false); setInitialCountInput(''); }} compact />
+                      <AppButton title="保存" variant="primary" onPress={handleSaveInitialCount} compact />
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => { setInitialCountInput(String(asset.initialUseCount ?? 0)); setEditingInitialCount(true); }}
+                    style={[styles.initialCountRow, { borderBottomColor: theme.colors.outline }]}
+                  >
+                    <Text style={[styles.initialCountLabel, { color: theme.colors.onSurfaceVariant }]}>初始使用次数</Text>
+                    <Text style={[styles.initialCountValue, { color: theme.colors.primary }]}>
+                      {asset.initialUseCount ?? 0} 次
+                      <Text style={{ color: theme.colors.tertiary, fontSize: 12 }}>  编辑</Text>
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {/* +1 Button */}
                 <AppButton
-                  title="+1 使用"
+                  title="使用"
                   variant="primary"
                   icon="Plus"
                   onPress={handleUsagePlusOne}
@@ -459,8 +510,9 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
                 {/* Cost-per-use trend */}
                 {usageRecords.length >= 2 && (() => {
                   const reversed = [...usageRecords].reverse();
+                  const initialCount = asset.initialUseCount ?? 0;
                   const points = reversed.map((_, i) => {
-                    const count = i + 1;
+                    const count = initialCount + i + 1;
                     return formatCurrency(asset.purchasePrice / count, currencySymbol);
                   });
                   const display = points.length <= 6 ? points : [
@@ -493,7 +545,9 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
                   </View>
                 ) : (
                   <Text style={[styles.emptySubtext, { color: theme.colors.tertiary }]}>
-                    还没记录过使用，点上方按钮记录第一次吧
+                    {asset.initialUseCount > 0
+                      ? `已设置初始 ${asset.initialUseCount} 次，点上方按钮继续记录`
+                      : '还没记录过使用，点上方按钮记录第一次吧'}
                   </Text>
                 )}
               </>
@@ -725,6 +779,11 @@ const styles = StyleSheet.create({
   usageStatValue: { fontSize: 18, fontWeight: '700' },
   usageStatLabel: { fontSize: 12, marginTop: 2 },
   usageRecent: { fontSize: 12, textAlign: 'center', marginTop: 10 },
+  initialCountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 8 },
+  initialCountLabel: { fontSize: 14 },
+  initialCountValue: { fontSize: 14, fontWeight: '600' },
+  initialCountForm: { padding: 12, borderRadius: radius.sm, marginBottom: 8 },
+  initialCountActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4 },
   usagePlusBtn: { marginBottom: 12 },
   usageTrend: { fontSize: 12, marginBottom: 12, fontStyle: 'italic', paddingHorizontal: 4 },
   usageHistoryList: { marginTop: 4 },

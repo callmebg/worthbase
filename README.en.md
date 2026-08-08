@@ -4,7 +4,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/callmebg/worthbase?color=blue" alt="License"></a>
   <a href="https://github.com/callmebg/worthbase/releases"><img src="https://img.shields.io/github/v/release/callmebg/worthbase" alt="Release"></a>
   <img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-brightgreen" alt="Platform">
-  <img src="https://img.shields.io/badge/Expo-SDK%2057-black" alt="Expo">
+  <img src="https://img.shields.io/badge/Expo-SDK%2055-black" alt="Expo">
   <a href="./CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome"></a>
 </p>
 
@@ -39,9 +39,12 @@ A **privacy-first, fully offline** personal net worth tracker. No transaction lo
 - Multi-account balance summary with one-tap total
 
 ### Net Worth Trend Analysis
-- Net worth trend line chart with pinch-to-zoom and pan-to-drag gestures
-- Net worth = Liquid assets + Asset valuations − Unamortized purchase costs
-- Net worth goal setting with progress bar visualization
+- Interactive trend line chart with pinch-to-zoom, pan-to-drag, tap-for-tooltip, and fullscreen landscape mode
+- Multiple time range options: 3m / 6m / 1y / YTD / All / Custom range
+- Downsampling algorithm preserves peaks and valleys, max 24 data points for smooth rendering
+- Net worth = Liquid assets + Asset valuations
+- Net worth goal setting (via Dashboard bottom sheet) with progress bar visualization
+- Goal achievement projection: estimates achievement date using linear regression on last 6 data points
 
 ### Physical Asset Management
 - 8 asset categories: Vehicles, Real Estate, Electronics, Digital, Home, Luxury, Precious Metals, Other
@@ -105,8 +108,8 @@ Give every use a sense of value:
 
 | Category | Technology |
 |----------|------------|
-| Framework | React Native 0.86 + Expo SDK 57 |
-| Language | TypeScript 6.0 |
+| Framework | React Native 0.83 + Expo SDK 55 |
+| Language | TypeScript 5.9 |
 | Routing | Expo Router (File-based) |
 | Database | expo-sqlite (SQLite) |
 | State Management | Zustand |
@@ -216,14 +219,17 @@ cd android && ./gradlew assembleRelease
 npm test
 ```
 
-Runs 7 test suites with 158 unit tests, covering:
+Runs 8 test suites with 207 unit tests, covering:
 
 - Holding cost calculation engine (4 depreciation strategies, recurring expense intervals, sell settlement, maintenance allocation)
+- Net worth calculation (including liability account negative balances)
+- Amortization strategy recommendation (8 categories → strategy mapping)
 - Database Repository layer CRUD
-- Zustand Store state management
+- Zustand Store state management (including negative balances)
 - Data services (backup / export / import)
 - UI component rendering
 - Authentication service
+- Input validation (positive / negative / date / month)
 - Engine boundary conditions
 
 ---
@@ -270,7 +276,7 @@ worthbase/
 │   ├── theme/                  # Theme system (colors / typography / spacing / icons / tokens)
 │   ├── types/                  # Type definitions (enums, models)
 │   └── utils/                  # Utilities (crypto / formatting / validation)
-├── __tests__/                  # Unit tests (7 suites / 158 cases)
+├── __tests__/                  # Unit tests (8 suites / 207 cases)
 │   ├── helpers/                #   Test utilities (mock-database, etc.)
 ├── assets/                     # App icons and splash screen
 ├── app.json                    # Expo config
@@ -285,7 +291,7 @@ worthbase/
 ┌─────────────────────────────────────────────────────┐
 │                    UI Layer                          │
 │  app/*.tsx + src/components/                         │
-│  Expo Router 4-Tab nav + Paper MD3 components        │
+│  Expo Router 3-Tab nav + Paper MD3 components        │
 ├─────────────────────────────────────────────────────┤
 │                  State Layer                         │
 │  src/stores/ (Zustand)                               │
@@ -305,7 +311,7 @@ worthbase/
 ├─────────────────────────────────────────────────────┤
 │                   Data Layer                         │
 │  src/db/ (expo-sqlite)                               │
-│  8 tables (schema v7): accounts · balance_snapshots ·│
+│  8 tables (schema v8): accounts · balance_snapshots ·│
 │  assets · recurring_expenses · maintenance_records · │
 │  valuation_history · usage_records · settings        │
 └─────────────────────────────────────────────────────┘

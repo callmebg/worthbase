@@ -6,7 +6,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_VERSION = 7;
+const CURRENT_VERSION = 8;
 
 interface Migration {
   version: number;
@@ -114,6 +114,21 @@ const migrations: Migration[] = [
       if (!hasColumn) {
         await db.execAsync(`
           ALTER TABLE assets ADD COLUMN usage_tracking INTEGER NOT NULL DEFAULT 0;
+        `);
+      }
+    },
+  },
+  // Version 8: Add initial_use_count column to assets
+  {
+    version: 8,
+    description: 'Add initial_use_count column to assets for custom initial use count',
+    up: async (db: SQLiteDatabase) => {
+      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(assets);');
+      const hasColumn = columns.some((column) => column.name === 'initial_use_count');
+
+      if (!hasColumn) {
+        await db.execAsync(`
+          ALTER TABLE assets ADD COLUMN initial_use_count INTEGER NOT NULL DEFAULT 0;
         `);
       }
     },

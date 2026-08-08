@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS assets (
   valuation_tracking INTEGER NOT NULL DEFAULT 0,
   current_valuation REAL,
   usage_tracking INTEGER NOT NULL DEFAULT 0,
+  initial_use_count INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active',
   sell_date TEXT,
   sell_price REAL,

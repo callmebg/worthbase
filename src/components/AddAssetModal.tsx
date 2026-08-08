@@ -71,6 +71,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const [valuationTracking, setValuationTracking] = useState(false);
   const [currentValuation, setCurrentValuation] = useState('');
   const [usageTracking, setUsageTracking] = useState(false);
+  const [initialUseCount, setInitialUseCount] = useState('');
 
   // Step 3 fields
   const [recurringExpenses, setRecurringExpenses] = useState<DraftRecurring[]>([]);
@@ -138,6 +139,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
     setAmortizationType(AmortizationType.SIMPLE_LINEAR);
     setExpectedLifespan(''); setResidualValue('');
     setValuationTracking(false); setCurrentValuation('');
+    setUsageTracking(false); setInitialUseCount('');
     setRecurringExpenses([]); setMaintenanceRecords([]);
     setRecurringName(''); setRecurringAmount('');
     setMaintenanceName(''); setMaintenanceAmount('');
@@ -178,6 +180,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       setValuationTracking(editAsset.valuationTracking);
       setCurrentValuation(editAsset.currentValuation ? String(editAsset.currentValuation) : '');
       setUsageTracking(editAsset.usageTracking);
+      setInitialUseCount(editAsset.initialUseCount ? String(editAsset.initialUseCount) : '');
 
       // Load existing recurring expenses and maintenance records with their IDs
       (async () => {
@@ -238,6 +241,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         valuationTracking,
         currentValuation: currentValuation ? parseFloat(currentValuation) : (valuationTracking ? parseFloat(purchasePrice) || null : null),
         usageTracking,
+        initialUseCount: usageTracking && initialUseCount.trim() ? parseInt(initialUseCount) || 0 : 0,
         weightGrams: category === AssetCategory.PRECIOUS_METAL && weightGrams.trim() ? parseFloat(weightGrams) : null,
         imagePath: null,
         sellDate: null,
@@ -355,6 +359,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         valuationTracking: false,
         currentValuation: null,
         usageTracking: false,
+        initialUseCount: 0,
         weightGrams: category === AssetCategory.PRECIOUS_METAL && weightGrams.trim() ? parseFloat(weightGrams) : null,
         imagePath: null,
         sellDate: null,
@@ -622,6 +627,17 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
                 trackColor={{ false: theme.colors.outline, true: theme.colors.primary }}
               />
             </View>
+
+            {usageTracking && (
+              <AppTextInput bottomSheet
+                label="初始使用次数"
+                value={initialUseCount}
+                onChangeText={setInitialUseCount}
+                placeholder="已经用了多少次？"
+                keyboardType="number-pad"
+                helperText="补录历史物品的已使用次数，使次均成本更准确"
+              />
+            )}
           </>
         )}
 

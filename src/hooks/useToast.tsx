@@ -40,11 +40,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const show = useCallback(
     (message: string, type: ToastType = 'info', duration?: number) => {
-      setState({
-        visible: true,
-        message,
-        type,
-        duration: duration ?? DEFAULT_DURATION[type],
+      const dur = duration ?? DEFAULT_DURATION[type];
+      // Force state transition if toast is already visible,
+      // otherwise Snackbar's internal timer won't reset.
+      setState((prev) => {
+        if (!prev.visible) {
+          return { visible: true, message, type, duration: dur };
+        }
+        // Hide first, then show after a tick
+        setTimeout(() => {
+          setState({ visible: true, message, type, duration: dur });
+        }, 50);
+        return { ...prev, visible: false };
       });
     },
     [],

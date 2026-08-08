@@ -101,6 +101,8 @@ export const ImportService = {
             residualValue: a.residualValue ?? null,
             valuationTracking: a.valuationTracking ?? false,
             currentValuation: a.currentValuation ?? null,
+            usageTracking: a.usageTracking ?? false,
+            initialUseCount: a.initialUseCount ?? 0,
             status: a.status, sellDate: a.sellDate ?? null,
             sellPrice: a.sellPrice ?? null, weightGrams: a.weightGrams ?? null,
             imagePath: a.imagePath ?? null,

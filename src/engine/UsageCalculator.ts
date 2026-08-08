@@ -18,7 +18,9 @@ export const UsageCalculator = {
    */
   async calculate(asset: Asset): Promise<UsageResult> {
     const useCount = await UsageRepository.getCount(asset.id);
-    const costPerUse = useCount > 0 ? asset.purchasePrice / useCount : Infinity;
+    const initialUseCount = asset.initialUseCount ?? 0;
+    const totalUseCount = initialUseCount + useCount;
+    const costPerUse = totalUseCount > 0 ? asset.purchasePrice / totalUseCount : Infinity;
     const lastUsedAt = await UsageRepository.getLastUsed(asset.id);
 
     const referenceDate = lastUsedAt ?? asset.purchaseDate;
@@ -29,7 +31,7 @@ export const UsageCalculator = {
     sinceDate.setDate(sinceDate.getDate() - 30);
     const recentUseCount = await UsageRepository.getRecentCount(asset.id, sinceDate.toISOString().substring(0, 10));
 
-    return { useCount, costPerUse, lastUsedAt, daysSinceLastUse, isNeglected, recentUseCount };
+    return { useCount, initialUseCount, totalUseCount, costPerUse, lastUsedAt, daysSinceLastUse, isNeglected, recentUseCount };
   },
 
   /**
@@ -39,6 +41,7 @@ export const UsageCalculator = {
   async calculateAll(assets: Asset[]): Promise<Map<string, UsageResult>> {
     const results = new Map<string, UsageResult>();
     for (const asset of assets) {
+      if (!asset.usageTracking) continue;
       results.set(asset.id, await this.calculate(asset));
     }
     return results;

@@ -35,6 +35,7 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
     valuationTracking: false,
     currentValuation: null,
     usageTracking: false,
+    initialUseCount: 0,
     status: AssetStatus.ACTIVE,
     sellDate: null,
     sellPrice: null,

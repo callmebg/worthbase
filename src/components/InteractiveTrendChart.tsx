@@ -2,8 +2,13 @@
  * InteractiveTrendChart – financial line chart with pinch-to-zoom,
  * pan-to-drag, X/Y axis labels, and grid lines.
  *
- * Uses battle-tested PanGestureHandler + PinchGestureHandler (old API)
- * with react-native-svg for rendering. No gesture composition issues.
+ * Uses PanGestureHandler + PinchGestureHandler + TapGestureHandler (old API)
+ * with react-native-svg for rendering. Callbacks run on JS thread — no
+ * worklet / runOnJS bridge needed, which keeps React state updates and
+ * SVG re-renders perfectly in sync.
+ *
+ * Supports 'overview' and 'fullscreen' modes with enhanced gesture
+ * sensitivity in fullscreen.
  */
 
 import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
@@ -32,6 +37,8 @@ import { formatCurrency, formatCompactCurrency } from '@/utils/format';
 export interface TrendChartData {
   labels: string[];
   values: number[];
+  /** Full date strings (YYYY-MM-DD) for year-boundary detection in X-axis labels */
+  fullDates?: string[];
 }
 
 interface Props {
@@ -49,6 +56,8 @@ interface Props {
   goalValue?: number | null;
   lossColor?: string;
   goalColor?: string;
+  /** Display mode: 'overview' (default) or 'fullscreen' with enhanced gestures */
+  mode?: 'overview' | 'fullscreen';
 }
 
 /* ── constants ──────────────────────────────────────────── */
@@ -74,8 +83,10 @@ export const InteractiveTrendChart: React.FC<Props> = ({
   goalValue = null,
   lossColor = '#EA3943',
   goalColor = '#FDCB6E',
+  mode = 'overview',
 }) => {
   const totalPoints = data.values.length;
+  const isFullscreen = mode === 'fullscreen';
 
   /* ── layout measurement ───────────────────────────────── */
 
@@ -100,11 +111,25 @@ export const InteractiveTrendChart: React.FC<Props> = ({
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   // Reset window when data length changes (e.g. new time range)
+  // Fullscreen: show a subset so gestures have room to navigate
+  const fullscreenInitRef = useRef(false);
   useEffect(() => {
-    setWindowStart(0);
-    setWindowSize(totalPoints);
     setSelectedIndex(null);
-  }, [totalPoints]);
+    if (isFullscreen) {
+      if (!fullscreenInitRef.current) {
+        // First load: show last ~12 points (or all if fewer)
+        const initSize = Math.min(totalPoints, 12);
+        const initStart = Math.max(0, totalPoints - initSize);
+        setWindowStart(initStart);
+        setWindowSize(initSize);
+        fullscreenInitRef.current = true;
+      }
+      // Subsequent data changes: keep current window (user may be navigating)
+    } else {
+      setWindowStart(0);
+      setWindowSize(totalPoints);
+    }
+  }, [totalPoints, isFullscreen]);
 
   // Gesture-start snapshots (refs avoid stale closures)
   const panStartRef = useRef(0);
@@ -188,16 +213,26 @@ export const InteractiveTrendChart: React.FC<Props> = ({
   /* ── X-axis labels ────────────────────────────────────── */
 
   const xLabels = useMemo(() => {
-    const maxLabels = Math.max(2, Math.floor(chartW / 64));
-    const step = Math.max(1, Math.ceil(visLabels.length / maxLabels));
-    return visLabels.filter((_, i) => i % step === 0 || i === visLabels.length - 1);
-  }, [visLabels, chartW]);
+    const n = visLabels.length;
+    if (n === 0) return [];
 
-  /* ── gesture handlers (old API) ───────────────────────────
+    // Detect year boundary in visible range
+    const visDates = data.fullDates?.slice(vStart, vEnd);
+    const crossesYear = visDates && visDates.length >= 2 &&
+      visDates[0].substring(0, 4) !== visDates[visDates.length - 1].substring(0, 4);
+
+    // Use full dates (YYYY-MM-DD) when crossing years, otherwise short labels (MM-DD)
+    const labelSource = crossesYear && visDates ? visDates : visLabels;
+
+    const maxLabels = Math.max(2, Math.floor(chartW / (crossesYear ? 80 : 64)));
+    const step = Math.max(1, Math.ceil(n / maxLabels));
+    return labelSource.filter((_: string, i: number) => i % step === 0 || i === n - 1);
+  }, [visLabels, data.fullDates, vStart, vEnd, chartW]);
+
+  /* ── gesture handlers (old API, JS-thread callbacks) ────────
    * onHandlerStateChange fires on BEGAN / END transitions.
    * onGestureEvent fires continuously during ACTIVE only.
-   * We MUST use onHandlerStateChange to capture the start values,
-   * otherwise the first ACTIVE frame uses stale ref = 0.
+   * All callbacks run on the JS thread — direct React state updates.
    */
 
   const onPanStateChange = useCallback(
@@ -308,9 +343,12 @@ export const InteractiveTrendChart: React.FC<Props> = ({
   const s0 = `${Math.round(splitPct * 100)}%`;
   const gradId = 'trendAreaGrad';
 
+  // Fullscreen uses lower minDist for more responsive gestures
+  const panMinDist = isFullscreen ? 4 : 8;
+
   return (
     <View
-      style={[styles.root, propWidth ? { width: propWidth } : null, propHeight ? { height: propHeight } : null]}
+      style={[styles.root, propWidth ? { width: propWidth } : null, propHeight ? { height: propHeight } : { flex: 1 }]}
       onLayout={onLayout}
     >
       {/* Zoom controls */}
@@ -360,7 +398,7 @@ export const InteractiveTrendChart: React.FC<Props> = ({
             onHandlerStateChange={onPanStateChange}
             onGestureEvent={onPan}
             simultaneousHandlers={[pinchRef, tapRef]}
-            minDist={8}
+            minDist={panMinDist}
           >
             <TapGestureHandler
               ref={tapRef}

@@ -102,6 +102,34 @@ export const BalanceSnapshotRepository = {
   },
 
   /**
+   * Get the second-most-recent (by unique date) balance for each account.
+   * Deduplicates same-date snapshots, matching the AccountHistorySheet logic.
+   */
+  async getPreviousBalances(): Promise<Map<string, number>> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<{ account_id: string; balance: number; snapshot_date: string }>(
+      `SELECT account_id, balance, snapshot_date FROM balance_snapshots ORDER BY account_id, snapshot_date DESC;`
+    );
+    const latestBalances = new Map<string, number>();
+    const latestDates = new Map<string, string>();
+    const result = new Map<string, number>();
+    for (const row of rows) {
+      if (!latestBalances.has(row.account_id)) {
+        // First encounter = latest date, latest balance
+        latestBalances.set(row.account_id, row.balance);
+        latestDates.set(row.account_id, row.snapshot_date);
+      } else if (
+        !result.has(row.account_id) &&
+        row.snapshot_date !== latestDates.get(row.account_id)
+      ) {
+        // First encounter on a DIFFERENT date = previous data point
+        result.set(row.account_id, row.balance);
+      }
+    }
+    return result;
+  },
+
+  /**
    * Get all balances for a specific date across all accounts.
    */
   async getBalancesForDate(date: string): Promise<Map<string, number>> {

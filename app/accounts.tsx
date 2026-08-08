@@ -9,9 +9,9 @@ import {
   View,
   Text,
   FlatList,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { useAppTheme } from '@/utils/format';
 import { useAccountStore } from '@/stores/account-store';
@@ -31,7 +31,9 @@ import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { isValidNumber } from '@/utils/validation';
 import { LIABILITY_ACCOUNT_TYPES } from '@/types/enums';
 import { useToast } from '@/hooks/useToast';
+import { FORTUNES } from '@/utils/fortunes';
 import { spacing } from '@/theme/tokens';
+import { AccountExplainer } from '@/components/AccountExplainer';
 
 export default function AccountsScreen() {
   const theme = useAppTheme();
@@ -45,8 +47,23 @@ export default function AccountsScreen() {
   const [actionTarget, setActionTarget] = useState<Account | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showExplainer, setShowExplainer] = useState(false);
+  const [accountHistoryTarget, setAccountHistoryTarget] = useState<Account | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [previousBalances, setPreviousBalances] = useState<Map<string, number>>(new Map());
 
-  useEffect(() => { loadAccounts(); }, []);
+  useEffect(() => {
+    loadAccounts();
+    BalanceSnapshotRepository.getPreviousBalances().then(setPreviousBalances);
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    const fortune = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+    toast.show(fortune, 'success', 2500);
+    loadAccounts();
+    setTimeout(() => setRefreshing(false), 400);
+  };
 
   const totalBalance = accounts.reduce((sum, a) => sum + (balances.get(a.id) ?? 0), 0);
 
@@ -54,6 +71,8 @@ export default function AccountsScreen() {
     try {
       await updateBalance(accountId, balance);
       setUpdateTarget(null);
+      const prev = await BalanceSnapshotRepository.getPreviousBalances();
+      setPreviousBalances(prev);
       toast.show('余额已更新', 'success');
     } catch (err) {
       toast.show(`更新失败: ${(err as Error).message}`, 'error');
@@ -92,8 +111,20 @@ export default function AccountsScreen() {
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Total Balance Hero Card */}
       <View style={[styles.totalCard, { backgroundColor: theme.colors.primary }]}>
-        <Text style={[styles.totalLabel, { color: theme.colors.onPrimary }]}>账户余额总计</Text>
-        <Text style={[styles.totalAmount, { color: theme.colors.onPrimary }]}>{formatCurrency(totalBalance, currencySymbol)}</Text>
+        <View style={styles.heroLabelRow}>
+          <View style={styles.heroLabelLeft}>
+            <Text style={[styles.totalLabel, { color: theme.colors.onPrimary }]}>账户余额总计</Text>
+            <TouchableOpacity
+              onPress={() => setShowExplainer(true)}
+              style={styles.infoIconBtn}
+            >
+              <Icon name="Info" size={14} color={theme.colors.onPrimary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => setHistoryVisible(true)} activeOpacity={0.7}>
+          <Text style={[styles.totalAmount, { color: theme.colors.onPrimary }]}>{formatCurrency(totalBalance, currencySymbol)}</Text>
+        </TouchableOpacity>
         <Text style={[styles.accountCount, { color: theme.colors.onPrimary }]}>{accounts.length} 个账户</Text>
       </View>
 
@@ -101,10 +132,26 @@ export default function AccountsScreen() {
       <FlatList
         data={accounts}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: 24 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.primary}
+          />
+        }
+        ListFooterComponent={
+          <TouchableOpacity
+            onPress={() => setShowAddSheet(true)}
+            style={[styles.addBtn, { borderColor: theme.colors.outline }]}
+            activeOpacity={0.7}
+          >
+            <Icon name="Plus" size={18} color={theme.colors.primary} />
+            <Text style={[styles.addBtnLabel, { color: theme.colors.primary }]}>添加账户</Text>
+          </TouchableOpacity>
+        }
         renderItem={({ item }) => (
           <AppCard
-            onPress={() => setUpdateTarget(item)}
             onLongPress={() => handleLongPress(item)}
             style={styles.accountCard}
           >
@@ -122,38 +169,52 @@ export default function AccountsScreen() {
                   {AccountTypeLabels[item.type]}
                 </Text>
               </View>
+              <TouchableOpacity onPress={() => setUpdateTarget(item)} activeOpacity={0.7} style={styles.cardBalanceWrap}>
+                <Text style={[styles.cardBalance, { color: theme.colors.onSurface }]}>
+                  {formatCurrency(balances.get(item.id) ?? 0, currencySymbol)}
+                </Text>
+                {(() => {
+                  const current = balances.get(item.id) ?? 0;
+                  const sharePct = totalBalance !== 0 ? (current / totalBalance) * 100 : 0;
+                  const share = sharePct >= 0.05 ? sharePct.toFixed(1) : null;
+                  const prev = previousBalances.get(item.id);
+                  let deltaText = '';
+                  let deltaColor = theme.colors.onSurfaceVariant;
+                  if (prev !== undefined) {
+                    const delta = current - prev;
+                    if (delta !== 0) {
+                      const pct = prev !== 0 ? ((delta / Math.abs(prev)) * 100).toFixed(1) : null;
+                      const sign = delta > 0 ? '+' : '';
+                      deltaColor = delta > 0 ? theme.colors.error : theme.colors.success;
+                      deltaText = `${sign}${formatCurrency(delta, currencySymbol)}${pct ? ` (${sign}${pct}%)` : ''}`;
+                    }
+                  }
+                  if (!share && !deltaText) return null;
+                  return (
+                    <View style={styles.cardMetaRow}>
+                      {share && (
+                        <Text style={[styles.cardDelta, { color: theme.colors.onSurfaceVariant }]}>
+                          占比{share}%
+                        </Text>
+                      )}
+                      {share && deltaText && (
+                        <Text style={[styles.cardMetaSep, { color: theme.colors.onSurfaceVariant }]}>·</Text>
+                      )}
+                      {deltaText !== '' && (
+                        <Text style={[styles.cardDelta, { color: deltaColor }]}>
+                          {deltaText}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })()}
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.cardBalance, { color: theme.colors.onSurface }]}>
-              {formatCurrency(balances.get(item.id) ?? 0, currencySymbol)}
-            </Text>
-            <AppButton
-              title="更新余额"
-              variant="secondary"
-              onPress={() => setUpdateTarget(item)}
-              compact
-              style={styles.updateBtn}
-            />
           </AppCard>
         )}
       />
 
-      {/* Action Buttons */}
-      <View style={styles.actions}>
-        <AppButton
-          title="添加账户"
-          variant="primary"
-          icon="Plus"
-          onPress={() => setShowAddSheet(true)}
-          style={styles.actionBtn}
-        />
-        <AppButton
-          title="余额历史"
-          variant="secondary"
-          icon="Clock"
-          onPress={() => setHistoryVisible(true)}
-          style={styles.actionBtn}
-        />
-      </View>
+      {/* Add account button is at the bottom of the list */}
 
       {/* Add Account BottomSheet */}
       <AddAccountSheet
@@ -214,8 +275,22 @@ export default function AccountsScreen() {
         account={actionTarget}
         onClose={() => setActionTarget(null)}
         onEdit={(account) => { setActionTarget(null); setEditTarget(account); }}
+        onUpdateBalance={(account) => { setActionTarget(null); setUpdateTarget(account); }}
+        onViewHistory={(account) => { setActionTarget(null); setAccountHistoryTarget(account); }}
         onArchive={(account) => { setActionTarget(account); setConfirmArchive(true); }}
         onDelete={(account) => { setActionTarget(account); setConfirmDelete(true); }}
+      />
+
+      {/* Account History Sheet (single account balance changes) */}
+      <AccountHistorySheet
+        account={accountHistoryTarget}
+        onClose={() => setAccountHistoryTarget(null)}
+      />
+
+      {/* Account Explainer */}
+      <AccountExplainer
+        visible={showExplainer}
+        onClose={() => setShowExplainer(false)}
       />
 
       {/* Confirmation Sheets */}
@@ -391,11 +466,14 @@ function BalanceHistorySheet({ visible, onClose }: {
   return (
     <AppBottomSheet visible={visible} onClose={onClose} snapPoints={['60%', '85%']}>
       <Text style={[styles.sheetTitle, { color: theme.colors.onSurface }]}>余额更新历史</Text>
-      <ScrollView style={{ maxHeight: 300 }}>
-        {dates.map((item) => {
+      <FlatList
+        data={dates}
+        keyExtractor={item => item.date}
+        style={{ flex: 1 }}
+        renderItem={({ item }) => {
           const total = item.balances.reduce((s, b) => s + b.balance, 0);
           return (
-            <View key={item.date} style={[styles.historyRow, { borderBottomColor: theme.colors.outline }]}>
+            <View style={[styles.historyRow, { borderBottomColor: theme.colors.outline }]}>
               <Text style={[styles.historyDate, { color: theme.colors.onSurfaceVariant }]}>
                 {formatDate(item.date)}
               </Text>
@@ -404,8 +482,8 @@ function BalanceHistorySheet({ visible, onClose }: {
               </Text>
             </View>
           );
-        })}
-      </ScrollView>
+        }}
+      />
       <AppButton title="关闭" variant="primary" onPress={onClose} style={{ marginTop: spacing.md }} />
     </AppBottomSheet>
   );
@@ -484,10 +562,12 @@ function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }:
 
 // ── Account Action Sheet (long-press menu) ──
 
-function AccountActionSheet({ account, onClose, onEdit, onArchive, onDelete }: {
+function AccountActionSheet({ account, onClose, onEdit, onUpdateBalance, onViewHistory, onArchive, onDelete }: {
   account: Account | null;
   onClose: () => void;
   onEdit: (account: Account) => void;
+  onUpdateBalance: (account: Account) => void;
+  onViewHistory: (account: Account) => void;
   onArchive: (account: Account) => void;
   onDelete: (account: Account) => void;
 }) {
@@ -495,7 +575,7 @@ function AccountActionSheet({ account, onClose, onEdit, onArchive, onDelete }: {
   if (!account) return null;
 
   return (
-    <AppBottomSheet visible={!!account} onClose={onClose} snapPoints={['35%']}>
+    <AppBottomSheet visible={!!account} onClose={onClose} snapPoints={['45%']}>
       <View style={actionStyles.header}>
         <Icon
           name={ACCOUNT_TYPE_ICONS[account.type] || 'CreditCard'}
@@ -517,6 +597,16 @@ function AccountActionSheet({ account, onClose, onEdit, onArchive, onDelete }: {
       <TouchableOpacity style={actionStyles.actionRow} onPress={() => onEdit(account)}>
         <Icon name="Pencil" size={20} color={theme.colors.onSurface} />
         <Text style={[actionStyles.actionLabel, { color: theme.colors.onSurface }]}>编辑</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={actionStyles.actionRow} onPress={() => onUpdateBalance(account)}>
+        <Icon name="PenLine" size={20} color={theme.colors.onSurface} />
+        <Text style={[actionStyles.actionLabel, { color: theme.colors.onSurface }]}>记录余额</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={actionStyles.actionRow} onPress={() => onViewHistory(account)}>
+        <Icon name="History" size={20} color={theme.colors.onSurfaceVariant} />
+        <Text style={[actionStyles.actionLabel, { color: theme.colors.onSurfaceVariant }]}>查看变更</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={actionStyles.actionRow} onPress={() => onArchive(account)}>
@@ -548,6 +638,81 @@ const actionStyles = StyleSheet.create({
   actionLabel: { fontSize: 16 },
 });
 
+// ── Account History Sheet (single account balance changes) ──
+
+function AccountHistorySheet({ account, onClose }: {
+  account: Account | null;
+  onClose: () => void;
+}) {
+  const theme = useAppTheme();
+  const { currencySymbol } = useSettingsStore();
+  const [snapshots, setSnapshots] = useState<{ date: string; balance: number }[]>([]);
+
+  useEffect(() => {
+    if (account) loadSnapshots(account.id);
+  }, [account]);
+
+  const loadSnapshots = async (accountId: string) => {
+    const allDates = await BalanceSnapshotRepository.getAllSnapshotDates();
+    const result: { date: string; balance: number }[] = [];
+    for (const date of allDates) {
+      const balMap = await BalanceSnapshotRepository.getBalancesForDate(date);
+      const balance = balMap.get(accountId);
+      if (balance !== undefined) {
+        result.push({ date, balance });
+      }
+    }
+    setSnapshots(result);
+  };
+
+  if (!account) return null;
+
+  return (
+    <AppBottomSheet visible={!!account} onClose={onClose} snapPoints={['60%', '85%']}>
+      <Text style={[styles.sheetTitle, { color: theme.colors.onSurface }]}>{account.name} 变更历史</Text>
+      {snapshots.length < 2 ? (
+        <View style={styles.historyEmpty}>
+          <Icon name="History" size={32} color="onSurfaceVariant" />
+          <Text style={[styles.historyEmptyHint, { color: theme.colors.onSurfaceVariant }]}>
+            暂无变更历史
+          </Text>
+          <Text style={[styles.historyEmptyHint, { color: theme.colors.tertiary }]}>
+            记录两次余额后即可查看变化趋势
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={snapshots}
+          keyExtractor={item => item.date}
+          style={{ flex: 1 }}
+          renderItem={({ item, index }) => {
+            const prev = index < snapshots.length - 1 ? snapshots[index + 1].balance : null;
+            const delta = prev !== null ? item.balance - prev : null;
+            return (
+              <View style={[styles.historyRow, { borderBottomColor: theme.colors.outline }]}>
+                <Text style={[styles.historyDate, { color: theme.colors.onSurfaceVariant }]}>
+                  {formatDate(item.date)}
+                </Text>
+                <View style={styles.historyRight}>
+                  <Text style={[styles.historyTotal, { color: theme.colors.onSurface }]}>
+                    {formatCurrency(item.balance, currencySymbol)}
+                  </Text>
+                  {delta !== null && delta !== 0 && (
+                    <Text style={[styles.historyDelta, { color: delta > 0 ? theme.colors.error : theme.colors.success }]}>
+                      {delta > 0 ? '+' : ''}{formatCurrency(delta, currencySymbol)}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          }}
+        />
+      )}
+      <AppButton title="关闭" variant="primary" onPress={onClose} style={{ marginTop: spacing.md }} />
+    </AppBottomSheet>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   totalCard: {
@@ -560,19 +725,23 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
+  heroLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroLabelLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   totalLabel: { fontSize: 14, opacity: 0.85 },
+  infoIconBtn: { opacity: 0.7, padding: 2 },
   totalAmount: { fontSize: 32, fontWeight: '700', marginTop: spacing.xs },
   accountCount: { fontSize: 12, opacity: 0.6, marginTop: spacing.xs },
-  list: { paddingHorizontal: spacing.md, paddingBottom: 100 },
+  list: { paddingHorizontal: spacing.md },
   accountCard: { marginBottom: spacing.sm + spacing.xs },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+  cardHeader: { flexDirection: 'row', alignItems: 'center' },
   cardInfo: { flex: 1, marginLeft: spacing.sm + spacing.xs },
   cardName: { fontSize: 16, fontWeight: '600' },
   cardType: { fontSize: 12, marginTop: 2 },
-  cardBalance: { fontSize: 24, fontWeight: '700', marginBottom: spacing.sm + spacing.xs },
-  updateBtn: { marginTop: spacing.xs },
-  actions: { flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm + spacing.xs, paddingBottom: spacing.md },
-  actionBtn: { flex: 1 },
+  cardBalanceWrap: { alignItems: 'flex-end' },
+  cardBalance: { fontSize: 20, fontWeight: '700' },
+  cardDelta: { fontSize: 11, marginTop: 2 },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  cardMetaSep: { fontSize: 11, marginHorizontal: 4 },
   // Sheet styles
   sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: spacing.md },
   sheetSubtitle: { fontSize: 16, marginBottom: spacing.xs },
@@ -590,4 +759,21 @@ const styles = StyleSheet.create({
   },
   historyDate: { fontSize: 14 },
   historyTotal: { fontSize: 14, fontWeight: '600' },
+  historyRight: { alignItems: 'flex-end' },
+  historyDelta: { fontSize: 12, marginTop: 2 },
+  historyEmpty: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl },
+  historyEmptyHint: { fontSize: 14, marginTop: spacing.xs },
+  // Add button
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    marginTop: spacing.sm,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
+  },
+  addBtnLabel: { fontSize: 15, fontWeight: '600' },
 });

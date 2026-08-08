@@ -14,6 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import Constants from 'expo-constants';
 import { useAppTheme } from '@/utils/format';
 import { THEME_COLOR_MAP } from '@/theme/colors';
 import { spacing } from '@/theme/tokens';
@@ -332,7 +333,7 @@ export default function SettingsScreen() {
         <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>关于</Text>
         <AppListItem
           title="家底 WorthBase"
-          description="v1.4.1"
+          description={`v${Constants.expoConfig?.version ?? ''}`}
           icon="Info"
         />
         <Text style={[styles.aboutDesc, { color: theme.colors.onSurfaceVariant }]}>

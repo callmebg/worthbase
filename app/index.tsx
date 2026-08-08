@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/utils/format';
 import { useFocusEffect, useRouter, useNavigation } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { InteractiveTrendChart } from '@/components/InteractiveTrendChart';
 import { useAccountStore } from '@/stores/account-store';
 import { useAssetStore } from '@/stores/asset-store';
@@ -34,12 +35,13 @@ import { ValuationRepository } from '@/db/valuation-repository';
 import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
 import { spacing, radius } from '@/theme/tokens';
-import type { NetWorthResult, ValuationHistory, UsageResult, UsageNeglect } from '@/types/models';
+import type { NetWorthResult, ValuationHistory, UsageResult } from '@/types/models';
 import { formatCurrency, formatCompactCurrency } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
 import { useToast } from '@/hooks/useToast';
+import { FORTUNES } from '@/utils/fortunes';
 import { Settings } from 'lucide-react-native';
 import { OnboardingView } from '@/components/OnboardingView';
 import { TimeRangeSheet, type TimeRangeState, type TimeRangePreset } from '@/components/TimeRangeSheet';
@@ -49,29 +51,6 @@ import { AppTextInput } from '@/components/ui/TextInput';
 import { AppButton } from '@/components/ui/Button';
 
 const screenWidth = Dimensions.get('window').width;
-
-const FORTUNES = [
-  '💰 钱会流向重视它的人',
-  '📈 今天的净值比昨天高，就是好日子',
-  '🏠 你拥有的东西，也在拥有你',
-  '✨ 少买一件，多用一次，快乐加倍',
-  '🎯 净资产目标，每天都在靠近',
-  '💸 不记账的人不知道自己多有钱',
-  '🔮 被动收入 = 自由的基础',
-  '🌱 小钱不理，大钱不来',
-  '💎 真正的奢侈是用得够久',
-  '🚀 复利是世界的第八大奇迹',
-  '🧘 资产是数字，心安才是净值',
-  '🪷 买之前想三秒，买了就用回本',
-  '🎉 每一块钱都有它的使命',
-  '📊 趋势比数字重要，习惯比趋势重要',
-  '🏆 你在管理财富，不是财富在管理你',
-  '🌟 最值钱的资产是你自己',
-  '🦋 记账不是为了焦虑，是为了自由',
-  '🍀 好运偏爱有准备的钱包',
-  '⚡ 天天看净值，日日有进步',
-  '🌈 财务自由从了解自己有多少钱开始',
-];
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -101,7 +80,8 @@ export default function DashboardScreen() {
   const [totalMonthlyCost, setTotalMonthlyCost] = useState(0);
   const [costBreakdown, setCostBreakdown] = useState<{ name: string; cost: number; category: string }[]>([]);
   const [categoryBreakdown, setCategoryBreakdown] = useState<{ category: string; label: string; value: number }[]>([]);
-  const [trendData, setTrendData] = useState<{ labels: string[]; datasets: { data: number[] }[] }>({ labels: [], datasets: [{ data: [] }] });
+  const [trendData, setTrendData] = useState<{ labels: string[]; fullDates: string[]; datasets: { data: number[] }[] }>({ labels: [], fullDates: [], datasets: [{ data: [] }] });
+  const [allTrendData, setAllTrendData] = useState<{ labels: string[]; fullDates: string[]; datasets: { data: number[] }[] }>({ labels: [], fullDates: [], datasets: [{ data: [] }] });
   const [timeRange, setTimeRange] = useState<TimeRangeState>('6m');
   const [refreshing, setRefreshing] = useState(false);
   const [fullscreenChart, setFullscreenChart] = useState(false);
@@ -116,8 +96,6 @@ export default function DashboardScreen() {
 
   // Usage/cost-per-use state
   const [usageMap, setUsageMap] = useState<Map<string, UsageResult>>(new Map());
-  const [neglectedItems, setNeglectedItems] = useState<UsageNeglect[]>([]);
-  const [usageTab, setUsageTab] = useState<'expensive' | 'neglected'>('expensive');
 
   // Lock to landscape when fullscreen chart is open
   useEffect(() => {
@@ -152,8 +130,6 @@ export default function DashboardScreen() {
     // Usage data for cost-per-use dashboard insights
     const usageResults = await UsageCalculator.calculateAll(activeAssets);
     setUsageMap(usageResults);
-    const neglected = await UsageCalculator.getNeglected(activeAssets);
-    setNeglectedItems(neglected);
 
     // Category breakdown for visualization
     const catMap = new Map<string, number>();
@@ -218,17 +194,20 @@ export default function DashboardScreen() {
     // Keep only snapshots within range, then reverse to chronological (ASC) order
     const recentDates = allDates.filter(d => d >= cutoffStr && d <= endStr).reverse();
 
-    // Compute net worth for EVERY date in range first (before downsampling)
-    const allPoints: { date: string; value: number }[] = [];
-    for (const date of recentDates) {
-      const dateObj = new Date(date + 'T00:00:00');
+    // ALL dates in chronological order (for fullscreen chart with gesture navigation)
+    const allDatesChrono = [...allDates].reverse();
 
+    // Pre-compute balance totals and valuations for each date (reused for both filtered and full data)
+    const balanceTotals = new Map<string, number>();
+    const valuationTotals = new Map<string, number>();
+    for (const date of allDatesChrono) {
       // 1. Liquid assets — only from active (non-deleted) accounts
       const balMap = await BalanceSnapshotRepository.getBalancesForDate(date);
       let totalBalance = 0;
       for (const [accountId, b] of balMap.entries()) {
         if (activeAccountIds.has(accountId)) totalBalance += b;
       }
+      balanceTotals.set(date, totalBalance);
 
       // 2. Asset valuations — lookup in pre-fetched history (reverse scan for latest ≤ date)
       let totalValuation = 0;
@@ -244,10 +223,20 @@ export default function DashboardScreen() {
         // Fallback to purchase price if no valuation record exists before this date
         totalValuation += latestVal ?? asset.purchasePrice;
       }
-
-      // Net worth = account balances + asset valuations (matches hero card formula)
-      allPoints.push({ date, value: totalBalance + totalValuation });
+      valuationTotals.set(date, totalValuation);
     }
+
+    // Filtered data (for overview chart, hero card, projection)
+    const allPoints: { date: string; value: number }[] = recentDates.map(date => ({
+      date,
+      value: (balanceTotals.get(date) ?? 0) + (valuationTotals.get(date) ?? 0),
+    }));
+
+    // Full data (for fullscreen chart — gestures need full data for operating space)
+    const allPointsFull: { date: string; value: number }[] = allDatesChrono.map(date => ({
+      date,
+      value: (balanceTotals.get(date) ?? 0) + (valuationTotals.get(date) ?? 0),
+    }));
 
     // Estimate goal achievement date based on historical trend
     if (netWorthGoal && allPoints.length >= 2) {
@@ -259,15 +248,17 @@ export default function DashboardScreen() {
       setProjectionDetail(null);
     }
 
-    // Downsample to ≤ MAX_POINTS preserving peaks and valleys
-    const MAX_POINTS = 24;
-    const sampled = allPoints.length > MAX_POINTS
-      ? downsamplePreservingExtrema(allPoints, MAX_POINTS)
-      : allPoints;
+    // Filtered data for overview chart
+    const labels = allPoints.map(p => p.date.substring(5));
+    const fullDates = allPoints.map(p => p.date);
+    const points = allPoints.map(p => p.value);
+    setTrendData({ labels, fullDates, datasets: [{ data: points }] });
 
-    const labels = sampled.map(p => p.date.substring(5));
-    const points = sampled.map(p => p.value);
-    setTrendData({ labels, datasets: [{ data: points }] });
+    // Full data for fullscreen chart
+    const allLabels = allPointsFull.map(p => p.date.substring(5));
+    const allFullDates = allPointsFull.map(p => p.date);
+    const allValues = allPointsFull.map(p => p.value);
+    setAllTrendData({ labels: allLabels, fullDates: allFullDates, datasets: [{ data: allValues }] });
   }, [assets, accounts, timeRange, netWorthGoal]);
 
   useFocusEffect(useCallback(() => {
@@ -442,8 +433,7 @@ export default function DashboardScreen() {
         {trendData.datasets[0].data.length > 1 ? (
           <>
           <InteractiveTrendChart
-            data={{ labels: trendData.labels, values: trendData.datasets[0].data }}
-            width={screenWidth - 64}
+            data={{ labels: trendData.labels, fullDates: trendData.fullDates, values: trendData.datasets[0].data }}
             height={200}
             currencySymbol={currencySymbol}
             backgroundColor={theme.colors.surface}
@@ -466,7 +456,7 @@ export default function DashboardScreen() {
                 <Text style={[styles.deltaLabel, { color: theme.colors.onSurfaceVariant }]}>
                   期间变化
                 </Text>
-                <Text style={[styles.deltaValue, { color: isPositive ? theme.colors.success : theme.colors.error }]}>
+                <Text style={[styles.deltaValue, { color: isPositive ? theme.colors.error : theme.colors.success }]}>
                   {isPositive ? '+' : ''}{formatCurrency(delta, currencySymbol)}
                   {' '}({isPositive ? '+' : ''}{pct.toFixed(1)}%)
                 </Text>
@@ -559,94 +549,52 @@ export default function DashboardScreen() {
             次均成本洞察
           </Text>
 
-          {/* Tab toggle */}
-          <View style={styles.usageTabRow}>
-            <AppChip
-              label="最贵单次"
-              selected={usageTab === 'expensive'}
-              onPress={() => setUsageTab('expensive')}
-            />
-            <AppChip
-              label={`闲置提醒${neglectedItems.length > 0 ? ` (${neglectedItems.length})` : ''}`}
-              selected={usageTab === 'neglected'}
-              onPress={() => setUsageTab('neglected')}
-            />
-          </View>
+          {/* Unified ranking: top 3 by cost-per-use with inline neglect badges */}
+          <View style={styles.usageList}>
+            {(() => {
+              const activeAssets = assets.filter(a => a.status === AssetStatus.ACTIVE);
+              const ranked = activeAssets
+                .map(a => ({ asset: a, usage: usageMap.get(a.id) }))
+                .filter(({ usage }) => usage && usage.useCount > 0)
+                .sort((a, b) => (b.usage?.costPerUse ?? 0) - (a.usage?.costPerUse ?? 0))
+                .slice(0, 3);
 
-          {/* Expensive tab: top 3 highest cost-per-use */}
-          {usageTab === 'expensive' && (
-            <View style={styles.usageList}>
-              {(() => {
-                const activeAssets = assets.filter(a => a.status === AssetStatus.ACTIVE);
-                const ranked = activeAssets
-                  .map(a => ({ asset: a, usage: usageMap.get(a.id) }))
-                  .filter(({ usage }) => usage && usage.useCount > 0)
-                  .sort((a, b) => (b.usage?.costPerUse ?? 0) - (a.usage?.costPerUse ?? 0))
-                  .slice(0, 3);
+              if (ranked.length === 0) {
+                return (
+                  <Text style={[styles.usageEmpty, { color: theme.colors.tertiary }]}>
+                    还没有使用记录，去资产页记录第一次使用吧
+                  </Text>
+                );
+              }
 
-                if (ranked.length === 0) {
-                  return (
-                    <Text style={[styles.usageEmpty, { color: theme.colors.tertiary }]}>
-                      还没有使用记录，去资产页记录第一次使用吧
-                    </Text>
-                  );
-                }
-
-                return ranked.map(({ asset, usage }, i) => {
-                  const iconName = ASSET_CATEGORY_ICONS[asset.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
-                  return (
-                    <View key={asset.id} style={[styles.usageRow, i < ranked.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.outline }]}>
-                      <Icon name={iconName} size={20} color="primary" />
+              return ranked.map(({ asset, usage }, i) => {
+                const iconName = ASSET_CATEGORY_ICONS[asset.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
+                return (
+                  <View key={asset.id} style={[styles.usageRow, i < ranked.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.outline }]}>
+                    <Icon name={iconName} size={20} color={usage!.isNeglected ? 'warning' : 'primary'} />
+                    <View style={styles.usageNameWrap}>
                       <Text style={[styles.usageName, { color: theme.colors.onSurface }]} numberOfLines={1}>
                         {asset.name}
                       </Text>
-                      <View style={styles.usageRight}>
-                        <Text style={[styles.usageCostPerUse, { color: theme.colors.primary }]}>
-                          次均 {formatCurrency(usage!.costPerUse, currencySymbol)}
-                        </Text>
-                        <Text style={[styles.usageCount, { color: theme.colors.onSurfaceVariant }]}>
-                          用了{usage!.useCount}次
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                });
-              })()}
-            </View>
-          )}
-
-          {/* Neglected tab: items unused 90+ days */}
-          {usageTab === 'neglected' && (
-            <View style={styles.usageList}>
-              {neglectedItems.length === 0 ? (
-                <Text style={[styles.usageEmpty, { color: theme.colors.tertiary }]}>
-                  所有物品都在活跃使用中 🎉
-                </Text>
-              ) : (
-                neglectedItems.map((item, i) => {
-                  const iconName = ASSET_CATEGORY_ICONS[item.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
-                  return (
-                    <View key={item.assetId} style={[styles.usageRow, i < neglectedItems.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.outline }]}>
-                      <Icon name={iconName} size={20} color="warning" />
-                      <View style={styles.usageNameWrap}>
-                        <Text style={[styles.usageName, { color: theme.colors.onSurface }]} numberOfLines={1}>
-                          {item.assetName}
-                        </Text>
-                        <Text style={[styles.usageNeglectDays, { color: theme.colors.warning }]}>
-                          闲置 {item.daysSinceLastUse} 天
-                        </Text>
-                      </View>
-                      {isFinite(item.costPerUse) && (
-                        <Text style={[styles.usageCostPerUse, { color: theme.colors.warning }]}>
-                          次均 {formatCurrency(item.costPerUse, currencySymbol)}
+                      {usage!.isNeglected && (
+                        <Text style={[styles.usageNeglectBadge, { color: theme.colors.warning }]}>
+                          闲置{usage!.daysSinceLastUse}天
                         </Text>
                       )}
                     </View>
-                  );
-                })
-              )}
-            </View>
-          )}
+                    <View style={styles.usageRight}>
+                      <Text style={[styles.usageCostPerUse, { color: theme.colors.primary }]}>
+                        次均 {formatCurrency(usage!.costPerUse, currencySymbol)}
+                      </Text>
+                      <Text style={[styles.usageCount, { color: theme.colors.onSurfaceVariant }]}>
+                        用了{usage!.useCount}次
+                      </Text>
+                    </View>
+                  </View>
+                );
+              });
+            })()}
+          </View>
 
           <TouchableOpacity
             onPress={() => router.push('/assets')}
@@ -669,51 +617,27 @@ export default function DashboardScreen() {
       onRequestClose={() => setFullscreenChart(false)}
       statusBarTranslucent
     >
+      <GestureHandlerRootView style={styles.fullscreenContainer}>
       <SafeAreaView style={[styles.fullscreenContainer, { backgroundColor: theme.colors.background }]}>
-        {/* Header: close LEFT, title center, range RIGHT */}
+        {/* Header: close LEFT, title center */}
         <View style={styles.fullscreenHeader}>
           <TouchableOpacity
             onPress={() => setFullscreenChart(false)}
             style={styles.closeBtn}
             hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
           >
-            <Icon name="X" size={24} color="onSurface" />
+            <Icon name="X" size={20} color="onSurface" />
           </TouchableOpacity>
           <Text style={[styles.fullscreenTitle, { color: theme.colors.onSurface }]}>
             净资产趋势
           </Text>
-          <View style={styles.fullscreenRange}>
-            {isCustomRange ? (
-              <TouchableOpacity onPress={() => setSheetVisible(true)} style={styles.fsCustomRange}>
-                <Text style={[styles.fsCustomRangeText, { color: theme.colors.primary }]}>
-                  {rangeDisplayText}
-                </Text>
-                <Icon name="Calendar" size={16} color="primary" />
-              </TouchableOpacity>
-            ) : (
-              <>
-                {presetKeys.map(r => (
-                  <AppChip
-                    key={r}
-                    label={timeRangeLabels[r]}
-                    selected={timeRange === r}
-                    onPress={() => setTimeRange(r)}
-                    compact
-                  />
-                ))}
-                <TouchableOpacity onPress={() => setSheetVisible(true)} style={styles.calendarBtn}>
-                  <Icon name="Calendar" size={16} color="onSurfaceVariant" />
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
         </View>
 
         {/* Chart area — flex:1 fills remaining, onLayout gives real dims */}
         <View style={styles.fullscreenChartWrap}>
           <InteractiveTrendChart
             key={fullscreenKey}
-            data={{ labels: trendData.labels, values: trendData.datasets[0].data }}
+            data={{ labels: allTrendData.labels, fullDates: allTrendData.fullDates, values: allTrendData.datasets[0].data }}
             currencySymbol={currencySymbol}
             backgroundColor={theme.colors.surface}
             primaryColor={theme.colors.primary}
@@ -722,9 +646,11 @@ export default function DashboardScreen() {
             goalValue={netWorthGoal}
             lossColor={theme.colors.error}
             goalColor={theme.colors.warning}
+            mode="fullscreen"
           />
         </View>
       </SafeAreaView>
+      </GestureHandlerRootView>
     </Modal>
 
     {/* ── Time Range Picker Sheet ── */}
@@ -901,21 +827,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm + spacing.xs,
-    paddingVertical: spacing.sm,
-    minHeight: 52,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   fullscreenTitle: { fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
   closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(128,128,128,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   fullscreenRange: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  fullscreenChartWrap: { flex: 1, paddingHorizontal: spacing.sm, paddingBottom: spacing.xs },
+  fullscreenChartWrap: { flex: 1, paddingHorizontal: spacing.sm },
   // Custom range controls
   calendarBtn: { padding: 6 },
   backToPresetBtn: { padding: spacing.xs },
@@ -925,7 +850,6 @@ const styles = StyleSheet.create({
   fsCustomRange: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   fsCustomRangeText: { fontSize: 13, fontWeight: '600' },
   // Cost-per-use insight card
-  usageTabRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm + spacing.xs },
   usageList: { marginTop: spacing.xs },
   usageRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: spacing.sm },
   usageName: { flex: 1, fontSize: 14 },
@@ -933,6 +857,6 @@ const styles = StyleSheet.create({
   usageRight: { alignItems: 'flex-end' },
   usageCostPerUse: { fontSize: 14, fontWeight: '700' },
   usageCount: { fontSize: 11 },
-  usageNeglectDays: { fontSize: 12, marginTop: 2 },
+  usageNeglectBadge: { fontSize: 11, marginTop: 2 },
   usageEmpty: { fontSize: 13, paddingVertical: spacing.sm + spacing.xs, textAlign: 'center' },
 });
