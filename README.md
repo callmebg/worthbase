@@ -177,6 +177,31 @@ npm run ios
 
 ---
 
+## 版本管理
+
+发版前用脚本一键更新版本号，同步修改 3 处文件：
+
+```bash
+# 自动 versionCode +1
+./scripts/bump-version.sh 1.6.0
+
+# 手动指定 versionCode
+./scripts/bump-version.sh 1.6.0 10
+
+# 仅预览，不写入
+./scripts/bump-version.sh 1.6.0 --dry
+```
+
+更新的文件：
+
+| 文件 | 字段 |
+|------|------|
+| `package.json` | `version` |
+| `app.json` | `expo.version` |
+| `android/app/build.gradle` | `versionCode` + `versionName` |
+
+> `app/settings.tsx` 通过 `expo-constants` 动态读取版本，无需手动更新。
+
 ## 构建
 
 ### EAS 云端构建（推荐）

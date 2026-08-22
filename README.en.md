@@ -172,6 +172,31 @@ npm run ios
 
 ---
 
+## Version Management
+
+Use the bump script to update the version number across all 3 files before a release:
+
+```bash
+# Auto-increment versionCode
+./scripts/bump-version.sh 1.6.0
+
+# Specify versionCode manually
+./scripts/bump-version.sh 1.6.0 10
+
+# Preview only (no file changes)
+./scripts/bump-version.sh 1.6.0 --dry
+```
+
+Files updated:
+
+| File | Field |
+|------|-------|
+| `package.json` | `version` |
+| `app.json` | `expo.version` |
+| `android/app/build.gradle` | `versionCode` + `versionName` |
+
+> `app/settings.tsx` reads the version dynamically via `expo-constants`, no manual update needed.
+
 ## Building
 
 ### EAS Cloud Build (Recommended)
