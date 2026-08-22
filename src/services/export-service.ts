@@ -88,12 +88,20 @@ export const ExportService = {
     const headers = ['日期', ...accounts.map(a => a.name), '总计'];
     const rows: string[][] = [headers];
 
-    for (const date of snapshotDates.reverse()) {
-      const balMap = await BalanceSnapshotRepository.getBalancesForDate(date);
+    // Use running balance so unchanged accounts carry forward their last known balance
+    const datesChrono = [...snapshotDates].reverse();
+    const allSnapshots = await BalanceSnapshotRepository.getAllSnapshotsChronological();
+    const runningBalances = new Map<string, number>();
+    let snapIdx = 0;
+    for (const date of datesChrono) {
+      while (snapIdx < allSnapshots.length && allSnapshots[snapIdx].snapshotDate <= date) {
+        runningBalances.set(allSnapshots[snapIdx].accountId, allSnapshots[snapIdx].balance);
+        snapIdx++;
+      }
       const row: string[] = [date];
       let total = 0;
       for (const account of accounts) {
-        const bal = balMap.get(account.id) ?? 0;
+        const bal = runningBalances.get(account.id) ?? 0;
         total += bal;
         row.push(String(bal));
       }

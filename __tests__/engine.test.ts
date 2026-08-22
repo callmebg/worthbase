@@ -40,7 +40,7 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
     sellDate: null,
     sellPrice: null,
     weightGrams: null,
-    imagePath: null,
+    imagePath: null, icon: null,
     createdAt: '2025-01-15T00:00:00Z',
     updatedAt: '2025-01-15T00:00:00Z',
     ...overrides,

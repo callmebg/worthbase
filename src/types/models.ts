@@ -62,6 +62,8 @@ export interface Asset {
   weightGrams: number | null;
   /** Path to asset image file (local file system) */
   imagePath: string | null;
+  /** Custom Lucide icon name (null = use category default) */
+  icon: string | null;
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }

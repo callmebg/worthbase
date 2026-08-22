@@ -36,7 +36,7 @@ import {
   AssetStatusColors,
   AssetCategoryLabels,
 } from '@/types/enums';
-import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
+import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
 import type { Asset, HoldingCostResult, RecurringExpense, MaintenanceRecord, SettlementResult, UsageRecord, UsageResult } from '@/types/models';
 import { formatCurrency, formatDate, getCurrentDate, getCurrentMonth, getMonthsHeld, formatDuration } from '@/utils/format';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
@@ -127,7 +127,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   const isActive = asset.status === AssetStatus.ACTIVE;
   const isSold = asset.status === AssetStatus.SOLD;
   const isRetired = asset.status === AssetStatus.RETIRED;
-  const iconName = ASSET_CATEGORY_ICONS[asset.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
+  const iconName = resolveAssetIcon(asset.icon, asset.category);
 
   const handleRetire = async () => {
     try {

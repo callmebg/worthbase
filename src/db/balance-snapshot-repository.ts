@@ -130,6 +130,18 @@ export const BalanceSnapshotRepository = {
   },
 
   /**
+   * Get all balance snapshots across all accounts, ordered by date ASC.
+   * Used for computing running totals in trend charts.
+   */
+  async getAllSnapshotsChronological(): Promise<{ accountId: string; balance: number; snapshotDate: string }[]> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<{ account_id: string; balance: number; snapshot_date: string }>(
+      `SELECT account_id, balance, snapshot_date FROM balance_snapshots ORDER BY snapshot_date ASC;`
+    );
+    return rows.map(r => ({ accountId: r.account_id, balance: r.balance, snapshotDate: r.snapshot_date }));
+  },
+
+  /**
    * Get all balances for a specific date across all accounts.
    */
   async getBalancesForDate(date: string): Promise<Map<string, number>> {

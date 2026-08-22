@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS assets (
   sell_price REAL,
   weight_grams REAL,
   image_path TEXT,
+  icon TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

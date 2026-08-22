@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## Requirements
 
 ### Requirement: Asset list view
 The system SHALL display all assets grouped by category using the shared Card, Chip, and EmptyState components. Each asset card SHALL display a Lucide icon for the category, and status badges SHALL use the Chip component with theme-aware status colors. The category group headers SHALL use Lucide icons instead of emoji. The status filter SHALL use the shared Chip component for filter toggles. The FAB SHALL use the shared FAB component with Lucide icon.

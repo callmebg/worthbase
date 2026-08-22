@@ -18,7 +18,8 @@ import { useAccountStore } from '@/stores/account-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { AccountType, AccountTypeLabels } from '@/types/enums';
-import { ACCOUNT_TYPE_ICONS } from '@/theme/icons';
+import { ACCOUNT_TYPE_ICONS, resolveAccountIcon } from '@/theme/icons';
+import { IconPickerSheet } from '@/components/IconPickerSheet';
 import type { Account } from '@/types/models';
 import { formatCurrency, formatDate } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
@@ -157,7 +158,7 @@ export default function AccountsScreen() {
           >
             <View style={styles.cardHeader}>
               <Icon
-                name={ACCOUNT_TYPE_ICONS[item.type] || 'CreditCard'}
+                name={resolveAccountIcon(item.icon, item.type)}
                 size={28}
                 color="primary"
               />
@@ -220,9 +221,9 @@ export default function AccountsScreen() {
       <AddAccountSheet
         visible={showAddSheet}
         onClose={() => setShowAddSheet(false)}
-        onAdd={async (name, type, initialBalance) => {
+        onAdd={async (name, type, initialBalance, icon) => {
           try {
-            await addAccount(name, type, null, initialBalance);
+            await addAccount(name, type, icon ?? null, initialBalance);
             setShowAddSheet(false);
             toast.show('账户已添加', 'success');
           } catch (err) {
@@ -249,9 +250,9 @@ export default function AccountsScreen() {
       <EditAccountSheet
         account={editTarget}
         onClose={() => setEditTarget(null)}
-        onSave={async (id, name, type) => {
+        onSave={async (id, name, type, icon) => {
           try {
-            await editAccount(id, { name, type });
+            await editAccount(id, { name, type, icon: icon ?? null });
             setEditTarget(null);
             toast.show('已保存', 'success');
           } catch (err) {
@@ -323,12 +324,14 @@ export default function AccountsScreen() {
 function AddAccountSheet({ visible, onClose, onAdd }: {
   visible: boolean;
   onClose: () => void;
-  onAdd: (name: string, type: AccountType, initialBalance?: number) => void;
+  onAdd: (name: string, type: AccountType, initialBalance?: number, icon?: string | null) => void;
 }) {
   const theme = useAppTheme();
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>(AccountType.WECHAT);
   const [initialBalance, setInitialBalance] = useState('');
+  const [customIcon, setCustomIcon] = useState<string | null>(null);
+  const [iconPickerVisible, setIconPickerVisible] = useState(false);
   const types = Object.values(AccountType);
 
   const balanceError =
@@ -355,6 +358,17 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
           />
         ))}
       </View>
+      {/* Custom icon button */}
+      <TouchableOpacity
+        onPress={() => setIconPickerVisible(true)}
+        style={[styles.iconButton, { backgroundColor: theme.colors.surfaceVariant }]}
+      >
+        <Icon name={resolveAccountIcon(customIcon, type)} size={20} color="primary" />
+        <Text style={[styles.iconButtonLabel, { color: theme.colors.onSurface }]}>
+          {customIcon ? customIcon : '自定义图标'}
+        </Text>
+        <Icon name="ChevronRight" size={16} color="onSurfaceVariant" />
+      </TouchableOpacity>
       <AppTextInput bottomSheet
         label={LIABILITY_ACCOUNT_TYPES.has(type) ? '初始欠款（可选）' : '初始余额（可选）'}
         value={initialBalance}
@@ -373,18 +387,24 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
             let balance: number | undefined;
             if (initialBalance && isValidNumber(initialBalance)) {
               balance = parseFloat(initialBalance);
-              // Auto-negate for liability accounts (user enters positive debt amount)
               if (LIABILITY_ACCOUNT_TYPES.has(type) && balance > 0) {
                 balance = -balance;
               }
             }
-            onAdd(name.trim(), type, balance);
+            onAdd(name.trim(), type, balance, customIcon);
             setName('');
             setInitialBalance('');
+            setCustomIcon(null);
           }}
           style={styles.sheetBtn}
         />
       </View>
+      <IconPickerSheet
+        visible={iconPickerVisible}
+        onClose={() => setIconPickerVisible(false)}
+        onConfirm={(iconName) => setCustomIcon(iconName)}
+        currentIcon={customIcon}
+      />
     </AppBottomSheet>
   );
 }
@@ -494,19 +514,22 @@ function BalanceHistorySheet({ visible, onClose }: {
 function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }: {
   account: Account | null;
   onClose: () => void;
-  onSave: (id: string, name: string, type: AccountType) => void;
+  onSave: (id: string, name: string, type: AccountType, icon?: string | null) => void;
   onArchive: (account: Account) => void;
   onHardDelete: (account: Account) => void;
 }) {
   const theme = useAppTheme();
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>(AccountType.WECHAT);
+  const [customIcon, setCustomIcon] = useState<string | null>(null);
+  const [iconPickerVisible, setIconPickerVisible] = useState(false);
   const types = Object.values(AccountType);
 
   useEffect(() => {
     if (account) {
       setName(account.name);
       setType(account.type);
+      setCustomIcon(account.icon);
     }
   }, [account]);
 
@@ -532,13 +555,24 @@ function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }:
           />
         ))}
       </View>
+      {/* Custom icon button */}
+      <TouchableOpacity
+        onPress={() => setIconPickerVisible(true)}
+        style={[styles.iconButton, { backgroundColor: theme.colors.surfaceVariant }]}
+      >
+        <Icon name={resolveAccountIcon(customIcon, type)} size={20} color="primary" />
+        <Text style={[styles.iconButtonLabel, { color: theme.colors.onSurface }]}>
+          {customIcon ? customIcon : '自定义图标'}
+        </Text>
+        <Icon name="ChevronRight" size={16} color="onSurfaceVariant" />
+      </TouchableOpacity>
       <View style={styles.sheetActions}>
         <AppButton title="取消" variant="text" onPress={onClose} style={styles.sheetBtn} />
         <AppButton
           title="保存"
           variant="primary"
           disabled={!name.trim()}
-          onPress={() => onSave(account.id, name.trim(), type)}
+          onPress={() => onSave(account.id, name.trim(), type, customIcon)}
           style={styles.sheetBtn}
         />
       </View>
@@ -555,6 +589,12 @@ function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }:
         icon="Trash2"
         onPress={() => onHardDelete(account)}
         style={{ marginTop: spacing.sm }}
+      />
+      <IconPickerSheet
+        visible={iconPickerVisible}
+        onClose={() => setIconPickerVisible(false)}
+        onConfirm={(iconName) => setCustomIcon(iconName)}
+        currentIcon={customIcon}
       />
     </AppBottomSheet>
   );
@@ -578,7 +618,7 @@ function AccountActionSheet({ account, onClose, onEdit, onUpdateBalance, onViewH
     <AppBottomSheet visible={!!account} onClose={onClose} snapPoints={['45%']}>
       <View style={actionStyles.header}>
         <Icon
-          name={ACCOUNT_TYPE_ICONS[account.type] || 'CreditCard'}
+          name={resolveAccountIcon(account.icon, account.type)}
           size={24}
           color="primary"
         />
@@ -776,4 +816,6 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   addBtnLabel: { fontSize: 15, fontWeight: '600' },
+  iconButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, marginBottom: 8 },
+  iconButtonLabel: { flex: 1, fontSize: 14, fontWeight: '500' },
 });

@@ -6,7 +6,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_VERSION = 8;
+const CURRENT_VERSION = 9;
 
 interface Migration {
   version: number;
@@ -129,6 +129,21 @@ const migrations: Migration[] = [
       if (!hasColumn) {
         await db.execAsync(`
           ALTER TABLE assets ADD COLUMN initial_use_count INTEGER NOT NULL DEFAULT 0;
+        `);
+      }
+    },
+  },
+  // Version 9: Add icon column to assets for custom icon support
+  {
+    version: 9,
+    description: 'Add icon column to assets for custom Lucide icon selection',
+    up: async (db: SQLiteDatabase) => {
+      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(assets);');
+      const hasColumn = columns.some((column) => column.name === 'icon');
+
+      if (!hasColumn) {
+        await db.execAsync(`
+          ALTER TABLE assets ADD COLUMN icon TEXT;
         `);
       }
     },

@@ -33,7 +33,7 @@ import { UsageCalculator } from '@/engine/UsageCalculator';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
-import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
+import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
 import { spacing, radius } from '@/theme/tokens';
 import type { NetWorthResult, ValuationHistory, UsageResult } from '@/types/models';
 import { formatCurrency, formatCompactCurrency } from '@/utils/format';
@@ -200,11 +200,21 @@ export default function DashboardScreen() {
     // Pre-compute balance totals and valuations for each date (reused for both filtered and full data)
     const balanceTotals = new Map<string, number>();
     const valuationTotals = new Map<string, number>();
+
+    // 1. Fetch ALL snapshots once and compute running balance per date.
+    //    This fixes the bug where only accounts with a snapshot on the exact
+    //    date were counted — now we carry forward the last known balance for
+    //    every account, so unchanged accounts are still included.
+    const allSnapshots = await BalanceSnapshotRepository.getAllSnapshotsChronological();
+    const runningBalances = new Map<string, number>();
+    let snapIdx = 0;
     for (const date of allDatesChrono) {
-      // 1. Liquid assets — only from active (non-deleted) accounts
-      const balMap = await BalanceSnapshotRepository.getBalancesForDate(date);
+      while (snapIdx < allSnapshots.length && allSnapshots[snapIdx].snapshotDate <= date) {
+        runningBalances.set(allSnapshots[snapIdx].accountId, allSnapshots[snapIdx].balance);
+        snapIdx++;
+      }
       let totalBalance = 0;
-      for (const [accountId, b] of balMap.entries()) {
+      for (const [accountId, b] of runningBalances.entries()) {
         if (activeAccountIds.has(accountId)) totalBalance += b;
       }
       balanceTotals.set(date, totalBalance);
@@ -568,7 +578,7 @@ export default function DashboardScreen() {
               }
 
               return ranked.map(({ asset, usage }, i) => {
-                const iconName = ASSET_CATEGORY_ICONS[asset.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
+                const iconName = resolveAssetIcon(asset.icon, asset.category);
                 return (
                   <View key={asset.id} style={[styles.usageRow, i < ranked.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.outline }]}>
                     <Icon name={iconName} size={20} color={usage!.isNeglected ? 'warning' : 'primary'} />

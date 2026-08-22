@@ -1,4 +1,4 @@
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Design token system
 The system SHALL define a centralized design token system covering colors, typography, spacing, border radius, and shadows. All tokens SHALL be defined as a Paper-compatible theme object, not as standalone constants. The legacy `COLORS` constant in `src/utils/format.ts` SHALL be deprecated in favor of theme-aware token access via `useTheme()`.

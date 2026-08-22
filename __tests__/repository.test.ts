@@ -233,7 +233,7 @@ describe('Asset Repository', () => {
       sellDate: null,
       sellPrice: null,
       weightGrams: null,
-      imagePath: null,
+      imagePath: null, icon: null,
     });
 
     expect(created.id).toBeDefined();
@@ -252,14 +252,14 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
     await AssetRepository.create({
       name: 'Retired Asset', category: AssetCategory.HOME,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.RETIRED, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.RETIRED, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     const active = await AssetRepository.getByStatus(AssetStatus.ACTIVE);
@@ -277,14 +277,14 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
     await AssetRepository.create({
       name: 'Sofa', category: AssetCategory.HOME,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     const electronics = await AssetRepository.getByCategory(AssetCategory.ELECTRONICS);
@@ -298,7 +298,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: 36,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await AssetRepository.update(asset.id, {
@@ -319,7 +319,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await AssetRepository.markRetired(asset.id);
@@ -333,7 +333,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await AssetRepository.recordSale(asset.id, '2025-06-15', 600);
@@ -349,7 +349,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await AssetRepository.delete(asset.id);
@@ -363,7 +363,7 @@ describe('Asset Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: 900, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await ValuationRepository.create({ assetId: asset.id, valuation: 900, recordedDate: '2025-01-01' });
@@ -389,7 +389,7 @@ describe('Valuation Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await ValuationRepository.create({ assetId: asset.id, valuation: 900, recordedDate: '2025-02-01' });
@@ -408,7 +408,7 @@ describe('Valuation Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await ValuationRepository.create({ assetId: asset.id, valuation: 900, recordedDate: '2025-01-01' });
@@ -427,14 +427,14 @@ describe('Valuation Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
     const asset2 = await AssetRepository.create({
       name: 'B', category: AssetCategory.ELECTRONICS,
       purchaseDate: '2025-01-01', purchasePrice: 2000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await ValuationRepository.create({ assetId: asset1.id, valuation: 900, recordedDate: '2025-01-01' });
@@ -452,7 +452,7 @@ describe('Valuation Repository', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: true, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     const record = await ValuationRepository.create({ assetId: asset.id, valuation: 900, recordedDate: '2025-01-01' });
@@ -594,7 +594,7 @@ describe('AssetRepository - markRetired with ended_reason', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     await RecurringExpenseRepository.create({
@@ -627,7 +627,7 @@ describe('AssetRepository - markRetired with ended_reason', () => {
       purchaseDate: '2025-01-01', purchasePrice: 1000,
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     // Create two recurring expenses
@@ -684,7 +684,7 @@ describe('Initial Use Count', () => {
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
       usageTracking: true, initialUseCount: 50,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     expect(asset.initialUseCount).toBe(50);
@@ -705,7 +705,7 @@ describe('Initial Use Count', () => {
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
       usageTracking: true, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     const fetched = await AssetRepository.getById(asset.id);
@@ -719,7 +719,7 @@ describe('Initial Use Count', () => {
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
       usageTracking: true, initialUseCount: 50,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     const result = await UsageCalculator.calculate(asset);
@@ -736,7 +736,7 @@ describe('Initial Use Count', () => {
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
       usageTracking: true, initialUseCount: 50,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     // Add 10 usage records on different dates
@@ -762,7 +762,7 @@ describe('Initial Use Count', () => {
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
       usageTracking: true, initialUseCount: 0,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     const result = await UsageCalculator.calculate(asset);
@@ -780,7 +780,7 @@ describe('Initial Use Count', () => {
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
       usageTracking: true, initialUseCount: 10,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     // Asset with usageTracking disabled but has initialUseCount
@@ -790,7 +790,7 @@ describe('Initial Use Count', () => {
       amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
       residualValue: null, valuationTracking: false, currentValuation: null,
       usageTracking: false, initialUseCount: 50,
-      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
     });
 
     const allAssets = [tracked, untracked];
@@ -933,5 +933,61 @@ describe('Balance History as-of-date calculation (fix-balance-history-mismatch)'
     let fixedTotal = 0;
     for (const b of fixedMap.values()) fixedTotal += b;
     expect(fixedTotal).toBe(8500); // A=5000 + B=3500
+  });
+
+  test('getAllSnapshotsChronological: returns all snapshots ordered by date ASC', async () => {
+    const accA = await AccountRepository.create({ name: '微信', type: AccountType.WECHAT, icon: null, sortOrder: 1 });
+    const accB = await AccountRepository.create({ name: '支付宝', type: AccountType.ALIPAY, icon: null, sortOrder: 2 });
+
+    await BalanceSnapshotRepository.create({ accountId: accA.id, balance: 5000, snapshotDate: '2025-07-01' });
+    await BalanceSnapshotRepository.create({ accountId: accB.id, balance: 3000, snapshotDate: '2025-07-15' });
+    await BalanceSnapshotRepository.create({ accountId: accB.id, balance: 3500, snapshotDate: '2025-08-08' });
+
+    const snapshots = await BalanceSnapshotRepository.getAllSnapshotsChronological();
+    expect(snapshots).toHaveLength(3);
+    expect(snapshots[0].snapshotDate).toBe('2025-07-01');
+    expect(snapshots[1].snapshotDate).toBe('2025-07-15');
+    expect(snapshots[2].snapshotDate).toBe('2025-08-08');
+  });
+
+  test('running balance: trend chart correctly carries forward unchanged accounts', async () => {
+    const accA = await AccountRepository.create({ name: '微信', type: AccountType.WECHAT, icon: null, sortOrder: 1 });
+    const accB = await AccountRepository.create({ name: '支付宝', type: AccountType.ALIPAY, icon: null, sortOrder: 2 });
+    const accC = await AccountRepository.create({ name: '银行卡', type: AccountType.BANK_CARD, icon: null, sortOrder: 3 });
+
+    // Day 1: all three accounts updated
+    await BalanceSnapshotRepository.create({ accountId: accA.id, balance: 5000, snapshotDate: '2025-07-01' });
+    await BalanceSnapshotRepository.create({ accountId: accB.id, balance: 3000, snapshotDate: '2025-07-01' });
+    await BalanceSnapshotRepository.create({ accountId: accC.id, balance: 2000, snapshotDate: '2025-07-01' });
+
+    // Day 2: only A and B updated, C unchanged
+    await BalanceSnapshotRepository.create({ accountId: accA.id, balance: 5500, snapshotDate: '2025-08-01' });
+    await BalanceSnapshotRepository.create({ accountId: accB.id, balance: 3200, snapshotDate: '2025-08-01' });
+
+    // Simulate the trend chart running balance computation
+    const allDates = await BalanceSnapshotRepository.getAllSnapshotDates();
+    const datesChrono = [...allDates].reverse();
+    const allSnapshots = await BalanceSnapshotRepository.getAllSnapshotsChronological();
+    const activeAccountIds = new Set([accA.id, accB.id, accC.id]);
+
+    const runningBalances = new Map<string, number>();
+    let snapIdx = 0;
+    const balanceTotals = new Map<string, number>();
+    for (const date of datesChrono) {
+      while (snapIdx < allSnapshots.length && allSnapshots[snapIdx].snapshotDate <= date) {
+        runningBalances.set(allSnapshots[snapIdx].accountId, allSnapshots[snapIdx].balance);
+        snapIdx++;
+      }
+      let total = 0;
+      for (const [accountId, b] of runningBalances.entries()) {
+        if (activeAccountIds.has(accountId)) total += b;
+      }
+      balanceTotals.set(date, total);
+    }
+
+    // Day 1: A=5000 + B=3000 + C=2000 = 10000
+    expect(balanceTotals.get('2025-07-01')).toBe(10000);
+    // Day 2: A=5500 + B=3200 + C=2000 (carried forward) = 10700
+    expect(balanceTotals.get('2025-08-01')).toBe(10700);
   });
 });

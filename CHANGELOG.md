@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-08-23
+
+### Added
+- 资产和账户支持自定义图标：用户可从 305 个 Lucide 图标中自由选择，不再受限于分类默认图标
+- 图标选择器组件：支持分类浏览（12 个四字分类 + 全部图标）和英文搜索
+- 图标解析回退链：自定义图标 → 分类/类型默认图标 → 硬编码兜底
+- 数据库 migration v9：assets 表新增 `icon` 列
+- "使用默认图标"选项：清除自定义图标，恢复分类默认
+
+### Changed
+- ICON_REGISTRY 从 ~50 个扩展到 305 个 Lucide 图标
+- 图标分类体系：12 个领域导向分类（常用精选、交通出行、建筑房产、科技数码、家居家电、穿戴配饰、金融财务、餐饮美食、运动户外、文娱休闲、工具器械、自然杂项）
+
+## [1.5.1] - 2026-08-23
+
+### Fixed
+- 净资产趋势图：某天只更新部分账户余额时，未更新账户的余额被遗漏（显示为 0），导致当天趋势下降。现在使用递进余额算法，未更新账户自动沿用最近一次已知余额
+- CSV 导出：同步修复递进余额逻辑，未更新账户在导出中正确显示上次余额而非 0
+
+### Changed
+- 趋势计算从逐日精确查询（`getBalancesForDate`）改为一次全量加载 + 内存递进计算（`getAllSnapshotsChronological` + running balance），减少 N 次 DB 查询为 1 次
+- 新增 `BalanceSnapshotRepository.getAllSnapshotsChronological()` 方法
+- 新增 2 个单元测试覆盖递进余额场景
+
 ## [1.4.0] - 2026-07-26
 
 ### Added

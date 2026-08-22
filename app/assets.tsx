@@ -30,7 +30,7 @@ import {
   AssetStatusColors,
   AssetCategoryLabels,
 } from '@/types/enums';
-import { ASSET_CATEGORY_ICONS, ASSET_STATUS_ICONS } from '@/theme/icons';
+import { ASSET_CATEGORY_ICONS, ASSET_STATUS_ICONS, resolveAssetIcon } from '@/theme/icons';
 import type { Asset, HoldingCostResult, UsageResult } from '@/types/models';
 import { formatCurrency, formatCompactCurrency, getMonthsHeld } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
@@ -320,7 +320,7 @@ function AssetCardItem({ asset, cost, usage, currencySymbol, onPress, onLongPres
   const valuation = asset.currentValuation ?? asset.purchasePrice;
   const change = valuation - asset.purchasePrice;
   const months = getMonthsHeld(asset.purchaseDate);
-  const iconName = ASSET_CATEGORY_ICONS[asset.category as keyof typeof ASSET_CATEGORY_ICONS] || 'Package';
+  const iconName = resolveAssetIcon(asset.icon, asset.category);
 
   const statusColor = AssetStatusColors[asset.status];
   const hasUsage = usage && isFinite(usage.costPerUse);

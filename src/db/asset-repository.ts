@@ -25,6 +25,7 @@ interface AssetRow {
   sell_price: number | null;
   weight_grams: number | null;
   image_path: string | null;
+  icon: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -48,6 +49,7 @@ function rowToAsset(row: AssetRow): Asset {
     sellPrice: row.sell_price,
     weightGrams: row.weight_grams,
     imagePath: row.image_path,
+    icon: row.icon,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -95,13 +97,13 @@ export const AssetRepository = {
         id, name, category, purchase_date, purchase_price,
         amortization_type, expected_lifespan_months, residual_value,
         valuation_tracking, current_valuation, usage_tracking, initial_use_count, status,
-        sell_date, sell_price, weight_grams, image_path, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        sell_date, sell_price, weight_grams, image_path, icon, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       id, asset.name, asset.category, asset.purchaseDate, asset.purchasePrice,
       asset.amortizationType, asset.expectedLifespanMonths, asset.residualValue,
       asset.valuationTracking ? 1 : 0, asset.currentValuation, asset.usageTracking ? 1 : 0,
       asset.initialUseCount ?? 0,
-      asset.status, asset.sellDate, asset.sellPrice, asset.weightGrams, asset.imagePath, now, now
+      asset.status, asset.sellDate, asset.sellPrice, asset.weightGrams, asset.imagePath, asset.icon, now, now
     );
     return { ...asset, id, createdAt: now, updatedAt: now };
   },
@@ -128,6 +130,7 @@ export const AssetRepository = {
     if (updates.sellPrice !== undefined) { fields.push('sell_price = ?'); values.push(updates.sellPrice); }
     if (updates.weightGrams !== undefined) { fields.push('weight_grams = ?'); values.push(updates.weightGrams); }
     if (updates.imagePath !== undefined) { fields.push('image_path = ?'); values.push(updates.imagePath); }
+    if (updates.icon !== undefined) { fields.push('icon = ?'); values.push(updates.icon); }
 
     if (fields.length === 0) return;
     fields.push('updated_at = ?');

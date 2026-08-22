@@ -19,7 +19,8 @@ import {
   AssetCategory, AssetCategoryLabels,
   AmortizationType,
 } from '@/types/enums';
-import { ASSET_CATEGORY_ICONS } from '@/theme/icons';
+import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
+import { IconPickerSheet } from '@/components/IconPickerSheet';
 import type { Asset, RecurringExpense, MaintenanceRecord } from '@/types/models';
 import { getCurrentDate } from '@/utils/format';
 import { isValidPositiveNumber, isValidDate } from '@/utils/validation';
@@ -63,6 +64,8 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const [purchaseDate, setPurchaseDate] = useState(getCurrentDate());
   const [purchasePrice, setPurchasePrice] = useState('');
   const [weightGrams, setWeightGrams] = useState('');
+  const [customIcon, setCustomIcon] = useState<string | null>(null);
+  const [iconPickerVisible, setIconPickerVisible] = useState(false);
 
   // Step 2 fields
   const [amortizationType, setAmortizationType] = useState<AmortizationType>(AmortizationType.SIMPLE_LINEAR);
@@ -136,6 +139,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
     setStep(1); setQuickMode(true);
     setName(''); setCategory(AssetCategory.ELECTRONICS);
     setPurchaseDate(getCurrentDate()); setPurchasePrice(''); setWeightGrams('');
+    setCustomIcon(null);
     setAmortizationType(AmortizationType.SIMPLE_LINEAR);
     setExpectedLifespan(''); setResidualValue('');
     setValuationTracking(false); setCurrentValuation('');
@@ -155,6 +159,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       setQuickMode(false); // Edit always uses full mode
       setName(editAsset.name);
       setCategory(editAsset.category);
+      setCustomIcon(editAsset.icon);
       setPurchaseDate(editAsset.purchaseDate);
       setPurchasePrice(String(editAsset.purchasePrice));
       setWeightGrams(editAsset.weightGrams ? String(editAsset.weightGrams) : '');
@@ -244,6 +249,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         initialUseCount: usageTracking && initialUseCount.trim() ? parseInt(initialUseCount) || 0 : 0,
         weightGrams: category === AssetCategory.PRECIOUS_METAL && weightGrams.trim() ? parseFloat(weightGrams) : null,
         imagePath: null,
+        icon: customIcon,
         sellDate: null,
         sellPrice: null,
       };
@@ -362,6 +368,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         initialUseCount: 0,
         weightGrams: category === AssetCategory.PRECIOUS_METAL && weightGrams.trim() ? parseFloat(weightGrams) : null,
         imagePath: null,
+        icon: customIcon,
         sellDate: null,
         sellPrice: null,
       };
@@ -423,6 +430,18 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
               ))}
             </View>
 
+            {/* Custom icon button */}
+            <TouchableOpacity
+              onPress={() => setIconPickerVisible(true)}
+              style={[styles.iconButton, { backgroundColor: theme.colors.surfaceVariant }]}
+            >
+              <Icon name={resolveAssetIcon(customIcon, category)} size={20} color="primary" />
+              <Text style={[styles.iconButtonLabel, { color: theme.colors.onSurface }]}>
+                {customIcon ? customIcon : '自定义图标'}
+              </Text>
+              <Icon name="ChevronRight" size={16} color="onSurfaceVariant" />
+            </TouchableOpacity>
+
             <AppTextInput bottomSheet
               label="购入价格"
               value={purchasePrice}
@@ -471,6 +490,18 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
                 />
               ))}
             </View>
+
+            {/* Custom icon button */}
+            <TouchableOpacity
+              onPress={() => setIconPickerVisible(true)}
+              style={[styles.iconButton, { backgroundColor: theme.colors.surfaceVariant }]}
+            >
+              <Icon name={resolveAssetIcon(customIcon, category)} size={20} color="primary" />
+              <Text style={[styles.iconButtonLabel, { color: theme.colors.onSurface }]}>
+                {customIcon ? customIcon : '自定义图标'}
+              </Text>
+              <Icon name="ChevronRight" size={16} color="onSurfaceVariant" />
+            </TouchableOpacity>
 
             <DatePickerField label="购入日期" value={purchaseDate} onChange={setPurchaseDate} />
             {!dateValid && purchaseDate.length > 0 ? (
@@ -734,6 +765,14 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
           </Text>
         </TouchableOpacity>
       )}
+
+      {/* Icon Picker Sheet */}
+      <IconPickerSheet
+        visible={iconPickerVisible}
+        onClose={() => setIconPickerVisible(false)}
+        onConfirm={(iconName) => setCustomIcon(iconName)}
+        currentIcon={customIcon}
+      />
     </AppBottomSheet>
   );
 }
@@ -767,4 +806,6 @@ const styles = StyleSheet.create({
   hintBoxText: { fontSize: 13, flex: 1, lineHeight: 18 },
   moreLink: { alignSelf: 'center', paddingVertical: 10, marginTop: 4 },
   moreLinkText: { fontSize: 13, fontWeight: '500' },
+  iconButton: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: radius.sm, marginBottom: 8 },
+  iconButtonLabel: { flex: 1, fontSize: 14, fontWeight: '500' },
 });
