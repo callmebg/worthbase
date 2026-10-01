@@ -33,7 +33,7 @@ import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { UsageRepository } from '@/db/usage-repository';
 import { UsageCalculator } from '@/engine/UsageCalculator';
-import { AccountType, AssetCategory, AmortizationType, AssetStatus } from '@/types/enums';
+import { AccountType, AssetCategory, AmortizationType, AssetStatus, ExpenseFrequency } from '@/types/enums';
 import { initMockDatabase, resetMockDatabase } from './helpers/mock-database';
 
 // ─── Setup / Teardown ───
@@ -599,6 +599,7 @@ describe('AssetRepository - markRetired with ended_reason', () => {
 
     await RecurringExpenseRepository.create({
       assetId: asset.id, name: 'Phone Bill', amount: 50,
+      frequency: ExpenseFrequency.MONTHLY,
       effectiveFrom: '2025-01', effectiveTo: null,
     });
 
@@ -633,10 +634,12 @@ describe('AssetRepository - markRetired with ended_reason', () => {
     // Create two recurring expenses
     const expense1 = await RecurringExpenseRepository.create({
       assetId: asset.id, name: 'Expense1', amount: 50,
+      frequency: ExpenseFrequency.MONTHLY,
       effectiveFrom: '2025-01', effectiveTo: null,
     });
     const expense2 = await RecurringExpenseRepository.create({
       assetId: asset.id, name: 'Expense2', amount: 30,
+      frequency: ExpenseFrequency.MONTHLY,
       effectiveFrom: '2025-01', effectiveTo: null,
     });
 
@@ -989,5 +992,61 @@ describe('Balance History as-of-date calculation (fix-balance-history-mismatch)'
     expect(balanceTotals.get('2025-07-01')).toBe(10000);
     // Day 2: A=5500 + B=3200 + C=2000 (carried forward) = 10700
     expect(balanceTotals.get('2025-08-01')).toBe(10700);
+  });
+});
+
+// ─── Recurring Expense Frequency Tests ───
+describe('RecurringExpenseRepository - frequency', () => {
+  async function makeAsset() {
+    return AssetRepository.create({
+      name: 'Test', category: AssetCategory.ELECTRONICS,
+      purchaseDate: '2025-01-01', purchasePrice: 1000,
+      amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
+      residualValue: null, valuationTracking: false, currentValuation: null, usageTracking: false, initialUseCount: 0,
+      status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: null, imagePath: null, icon: null,
+    });
+  }
+
+  test('create + read round-trips yearly frequency', async () => {
+    const asset = await makeAsset();
+    const created = await RecurringExpenseRepository.create({
+      assetId: asset.id, name: '车险', amount: 3000,
+      frequency: ExpenseFrequency.YEARLY,
+      effectiveFrom: '2025-01', effectiveTo: null,
+    });
+    expect(created.frequency).toBe(ExpenseFrequency.YEARLY);
+
+    const all = await RecurringExpenseRepository.getByAsset(asset.id);
+    expect(all).toHaveLength(1);
+    expect(all[0].frequency).toBe(ExpenseFrequency.YEARLY);
+  });
+
+  test('update can change frequency', async () => {
+    const asset = await makeAsset();
+    const created = await RecurringExpenseRepository.create({
+      assetId: asset.id, name: '物业费', amount: 900,
+      frequency: ExpenseFrequency.MONTHLY,
+      effectiveFrom: '2025-01', effectiveTo: null,
+    });
+
+    await RecurringExpenseRepository.update(created.id, { frequency: ExpenseFrequency.QUARTERLY });
+
+    const all = await RecurringExpenseRepository.getByAsset(asset.id);
+    expect(all[0].frequency).toBe(ExpenseFrequency.QUARTERLY);
+  });
+
+  test('rows without frequency (pre-v10) default to monthly on read', async () => {
+    const asset = await makeAsset();
+    // Simulate a legacy row inserted before the frequency column existed
+    const db = dbHolder.current;
+    await db.runAsync(
+      `INSERT INTO recurring_expenses (id, asset_id, name, amount, effective_from, effective_to, ended_reason, created_at)
+       VALUES ('legacy-1', ?, '旧数据', 100, '2025-01', NULL, NULL, '2025-01-01T00:00:00Z');`,
+      asset.id
+    );
+
+    const all = await RecurringExpenseRepository.getByAsset(asset.id);
+    expect(all).toHaveLength(1);
+    expect(all[0].frequency).toBe(ExpenseFrequency.MONTHLY);
   });
 });

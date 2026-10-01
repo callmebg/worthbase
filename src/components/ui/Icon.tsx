@@ -122,6 +122,7 @@ export const ICON_REGISTRY: Record<string, LucideIcon> = {
   Wallet, CreditCard, Banknote, Coins, CircleDollarSign,
   PiggyBank, Receipt, Calculator, BadgeCheck, Tag,
   TrendingUp, TrendingDown, ChartPie, ChartBar,
+  BarChart3: ChartBar, // lucide 旧名称别名（新版已更名为 ChartBar）
   WalletCards, Vault, HandCoins,
   // ── 餐饮美食 ──
   Utensils, UtensilsCrossed, Coffee, Wine, Beer,

@@ -18,6 +18,7 @@ import { MaintenanceRepository } from '@/db/maintenance-repository';
 import {
   AssetCategory, AssetCategoryLabels,
   AmortizationType,
+  ExpenseFrequency, ExpenseFrequencyLabels, ExpenseFrequencySuffixes,
 } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
 import { IconPickerSheet } from '@/components/IconPickerSheet';
@@ -81,6 +82,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const [maintenanceRecords, setMaintenanceRecords] = useState<DraftMaintenance[]>([]);
   const [recurringName, setRecurringName] = useState('');
   const [recurringAmount, setRecurringAmount] = useState('');
+  const [recurringFrequency, setRecurringFrequency] = useState<ExpenseFrequency>(ExpenseFrequency.MONTHLY);
   const [maintenanceName, setMaintenanceName] = useState('');
   const [maintenanceAmount, setMaintenanceAmount] = useState('');
   const [maintenanceDate, setMaintenanceDate] = useState(getCurrentDate());
@@ -145,7 +147,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
     setValuationTracking(false); setCurrentValuation('');
     setUsageTracking(false); setInitialUseCount('');
     setRecurringExpenses([]); setMaintenanceRecords([]);
-    setRecurringName(''); setRecurringAmount('');
+    setRecurringName(''); setRecurringAmount(''); setRecurringFrequency(ExpenseFrequency.MONTHLY);
     setMaintenanceName(''); setMaintenanceAmount('');
     setMaintenanceDate(getCurrentDate()); setMaintenanceAmortize(true);
     setUserModifiedAmortizationType(false); setUserModifiedLifespan(false);
@@ -192,6 +194,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         const existingRecurring = await RecurringExpenseRepository.getByAsset(editAsset.id);
         setRecurringExpenses(existingRecurring.map(r => ({
           id: r.id, name: r.name, amount: r.amount,
+          frequency: r.frequency ?? ExpenseFrequency.MONTHLY,
           effectiveFrom: r.effectiveFrom, effectiveTo: r.effectiveTo,
           endedReason: r.endedReason,
         } as DraftRecurring)));
@@ -217,10 +220,11 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
     if (!recurringAmount.trim() || !isValidPositiveNumber(recurringAmount)) { toast.show('请输入有效的金额（大于 0）', 'error'); return; }
     setRecurringExpenses([...recurringExpenses, {
       name: recurringName.trim(), amount: parseFloat(recurringAmount),
+      frequency: recurringFrequency,
       effectiveFrom: purchaseDate.substring(0, 7), effectiveTo: null,
       endedReason: null,
     } as DraftRecurring]);
-    setRecurringName(''); setRecurringAmount('');
+    setRecurringName(''); setRecurringAmount(''); setRecurringFrequency(ExpenseFrequency.MONTHLY);
   };
 
   const handleAddMaintenance = () => {
@@ -265,10 +269,11 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
       if (recurringName.trim() && recurringAmount.trim() && isValidPositiveNumber(recurringAmount)) {
         recurringExpenses.push({
           name: recurringName.trim(), amount: parseFloat(recurringAmount),
+          frequency: recurringFrequency,
           effectiveFrom: purchaseDate.substring(0, 7), effectiveTo: null,
           endedReason: null,
         } as DraftRecurring);
-        setRecurringName(''); setRecurringAmount('');
+        setRecurringName(''); setRecurringAmount(''); setRecurringFrequency(ExpenseFrequency.MONTHLY);
       }
 
       let savedAsset: Asset;
@@ -290,11 +295,13 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
           if (re.id && oldRecurring.some(o => o.id === re.id)) {
             await RecurringExpenseRepository.update(re.id, {
               name: re.name, amount: re.amount,
+              frequency: re.frequency ?? ExpenseFrequency.MONTHLY,
               effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo,
             });
           } else {
             await RecurringExpenseRepository.create({
               assetId: savedAsset.id, name: re.name, amount: re.amount,
+              frequency: re.frequency ?? ExpenseFrequency.MONTHLY,
               effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo,
             });
           }
@@ -329,6 +336,7 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
         for (const re of recurringExpenses) {
           await RecurringExpenseRepository.create({
             assetId: savedAsset.id, name: re.name, amount: re.amount,
+            frequency: re.frequency ?? ExpenseFrequency.MONTHLY,
             effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo,
           });
         }
@@ -678,13 +686,24 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
             {recurringExpenses.map((re, i) => (
               <View key={i} style={[styles.draftRow, { borderBottomColor: theme.colors.outline }]}>
                 <Text style={[styles.draftName, { color: theme.colors.onSurface }]}>{re.name}</Text>
-                <Text style={[styles.draftAmount, { color: theme.colors.onSurfaceVariant }]}>{re.amount}/月</Text>
+                <Text style={[styles.draftAmount, { color: theme.colors.onSurfaceVariant }]}>{re.amount}{ExpenseFrequencySuffixes[re.frequency ?? ExpenseFrequency.MONTHLY]}</Text>
                 <AppButton title="✕" variant="text" onPress={() => setRecurringExpenses(recurringExpenses.filter((_, idx) => idx !== i))} compact />
               </View>
             ))}
             <View style={styles.inlineAdd}>
               <AppTextInput bottomSheet label="名称(如话费)" value={recurringName} onChangeText={setRecurringName} style={{ flex: 2 }} />
               <AppTextInput bottomSheet label="金额" value={recurringAmount} onChangeText={setRecurringAmount} keyboardType="decimal-pad" style={{ flex: 1, marginLeft: 8 }} />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              {Object.values(ExpenseFrequency).map(freq => (
+                <AppChip
+                  key={freq}
+                  label={ExpenseFrequencyLabels[freq]}
+                  selected={recurringFrequency === freq}
+                  onPress={() => setRecurringFrequency(freq)}
+                  compact
+                />
+              ))}
             </View>
             <AppButton title="添加" variant="secondary" onPress={handleAddRecurring} compact style={{ alignSelf: 'flex-start', marginBottom: 8 }} />
 

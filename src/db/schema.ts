@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS recurring_expenses (
   asset_id TEXT NOT NULL,
   name TEXT NOT NULL,
   amount REAL NOT NULL,
+  frequency TEXT NOT NULL DEFAULT 'monthly',
   effective_from TEXT NOT NULL,
   effective_to TEXT,
   ended_reason TEXT,

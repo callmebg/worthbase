@@ -8,6 +8,7 @@ import type {
   AmortizationType,
   AssetCategory,
   AssetStatus,
+  ExpenseFrequency,
 } from './enums';
 
 /** 账户 - represents a financial account (WeChat, Alipay, bank, etc.) */
@@ -73,7 +74,10 @@ export interface RecurringExpense {
   id: string;
   assetId: string;
   name: string;
+  /** Amount per billing period (see frequency); normalized to monthly in calculations */
   amount: number;
+  /** Billing frequency: monthly (default), quarterly, or yearly */
+  frequency: ExpenseFrequency;
   /** Date from which this expense is effective (YYYY-MM) */
   effectiveFrom: string;
   /** Date until which this expense is effective (YYYY-MM), null = ongoing */

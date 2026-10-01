@@ -1,10 +1,20 @@
 /**
  * WorthBase (家底) - Recurring Expense Calculator
  * Queries recurring expenses effective for a given month and sums them.
+ * Amounts are normalized to a monthly equivalent based on billing frequency
+ * (monthly ÷1, quarterly ÷3, yearly ÷12) — this is the single choke point,
+ * so all downstream consumers (holding cost, settlement) see monthly values.
  */
 
 import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
 import type { RecurringExpense } from '@/types/models';
+import { EXPENSE_FREQUENCY_MONTHS, ExpenseFrequency } from '@/types/enums';
+
+/** Monthly-equivalent amount of an expense (amount ÷ months covered by its billing period) */
+export function toMonthlyAmount(expense: Pick<RecurringExpense, 'amount' | 'frequency'>): number {
+  const months = EXPENSE_FREQUENCY_MONTHS[expense.frequency] ?? EXPENSE_FREQUENCY_MONTHS[ExpenseFrequency.MONTHLY];
+  return expense.amount / months;
+}
 
 export const RecurringExpenseCalculator = {
   /**
@@ -17,13 +27,14 @@ export const RecurringExpenseCalculator = {
   },
 
   /**
-   * Sum the monthly amount of all recurring expenses effective for a given month.
+   * Sum the monthly-equivalent amount of all recurring expenses effective for a given month.
+   * Yearly expenses contribute amount÷12, quarterly amount÷3.
    * @param month Year-month string like "2025-07"
    * @param assetId Optional asset ID to filter by
    */
   async getMonthlyTotal(month: string, assetId?: string): Promise<number> {
     const expenses = await this.getForMonth(month, assetId);
-    return expenses.reduce((sum, e) => sum + e.amount, 0);
+    return expenses.reduce((sum, e) => sum + toMonthlyAmount(e), 0);
   },
 
   /**
@@ -56,7 +67,8 @@ export const RecurringExpenseCalculator = {
 
       if (fromMonth <= toMonth) {
         const monthsActive = monthDiff(fromMonth, toMonth) + 1;
-        total += expense.amount * monthsActive;
+        // Partial billing periods are prorated by month (consistent with monthly display)
+        total += toMonthlyAmount(expense) * monthsActive;
       }
     }
 

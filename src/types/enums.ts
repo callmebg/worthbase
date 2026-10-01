@@ -119,6 +119,40 @@ export const AmortizationTypeDescriptions: Record<AmortizationType, string> = {
 };
 
 /**
+ * Billing frequency for recurring expenses (经常性支出扣费周期).
+ * Amounts are normalized to a monthly equivalent (÷ months) in holding cost calculation.
+ */
+export enum ExpenseFrequency {
+  /** 按月扣费 */
+  MONTHLY = 'monthly',
+  /** 按季扣费（月度等价 = amount ÷ 3） */
+  QUARTERLY = 'quarterly',
+  /** 按年扣费（月度等价 = amount ÷ 12） */
+  YEARLY = 'yearly',
+}
+
+/** Human-readable labels for ExpenseFrequency */
+export const ExpenseFrequencyLabels: Record<ExpenseFrequency, string> = {
+  [ExpenseFrequency.MONTHLY]: '按月',
+  [ExpenseFrequency.QUARTERLY]: '按季',
+  [ExpenseFrequency.YEARLY]: '按年',
+};
+
+/** Short unit suffixes for displaying an expense amount (e.g. "300/月") */
+export const ExpenseFrequencySuffixes: Record<ExpenseFrequency, string> = {
+  [ExpenseFrequency.MONTHLY]: '/月',
+  [ExpenseFrequency.QUARTERLY]: '/季',
+  [ExpenseFrequency.YEARLY]: '/年',
+};
+
+/** Number of months covered by one billing period of each frequency */
+export const EXPENSE_FREQUENCY_MONTHS: Record<ExpenseFrequency, number> = {
+  [ExpenseFrequency.MONTHLY]: 1,
+  [ExpenseFrequency.QUARTERLY]: 3,
+  [ExpenseFrequency.YEARLY]: 12,
+};
+
+/**
  * Asset lifecycle status.
  * Transitions: active → retired, active → sold, retired → active, retired → sold.
  */

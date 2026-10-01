@@ -34,13 +34,19 @@ import {
   AssetStatus,
   AssetStatusLabels,
   AssetStatusColors,
+  AssetCategory,
   AssetCategoryLabels,
+  ExpenseFrequency,
+  ExpenseFrequencyLabels,
+  ExpenseFrequencySuffixes,
 } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
 import type { Asset, HoldingCostResult, RecurringExpense, MaintenanceRecord, SettlementResult, UsageRecord, UsageResult } from '@/types/models';
 import { formatCurrency, formatDate, getCurrentDate, getCurrentMonth, getMonthsHeld, formatDuration } from '@/utils/format';
+import { MetalPriceService, type MetalPrices } from '@/services/metal-price-service';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppButton } from '@/components/ui/Button';
+import { AppChip } from '@/components/ui/Chip';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
@@ -78,7 +84,11 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   const [showAddRecurring, setShowAddRecurring] = useState(false);
   const [recurringName, setRecurringName] = useState('');
   const [recurringAmount, setRecurringAmount] = useState('');
+  const [recurringFrequency, setRecurringFrequency] = useState<ExpenseFrequency>(ExpenseFrequency.MONTHLY);
   const [recurringFrom, setRecurringFrom] = useState(getCurrentMonth());
+
+  // Live metal reference prices (贵金属实时参考价)
+  const [metalPrices, setMetalPrices] = useState<MetalPrices | null>(null);
 
   // Maintenance record add state
   const [showAddMaintenance, setShowAddMaintenance] = useState(false);
@@ -122,6 +132,22 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // 贵金属资产：先展示缓存价格，再后台刷新（离线时保持缓存，静默降级）
+  useEffect(() => {
+    if (asset?.category !== AssetCategory.PRECIOUS_METAL || !asset?.weightGrams) {
+      setMetalPrices(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const cached = await MetalPriceService.getCached();
+      if (!cancelled && cached) setMetalPrices(cached);
+      const prices = await MetalPriceService.getPrices();
+      if (!cancelled) setMetalPrices(prices);
+    })();
+    return () => { cancelled = true; };
+  }, [asset?.id, asset?.category, asset?.weightGrams]);
+
   if (!asset) return null;
 
   const isActive = asset.status === AssetStatus.ACTIVE;
@@ -158,8 +184,8 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
     const amount = parseFloat(recurringAmount);
     if (isNaN(amount) || amount <= 0) { toast.show('请输入有效的金额', 'error'); return; }
     try {
-      await RecurringExpenseRepository.create({ assetId: asset.id, name: recurringName.trim(), amount, effectiveFrom: recurringFrom, effectiveTo: null });
-      setRecurringName(''); setRecurringAmount(''); setShowAddRecurring(false);
+      await RecurringExpenseRepository.create({ assetId: asset.id, name: recurringName.trim(), amount, frequency: recurringFrequency, effectiveFrom: recurringFrom, effectiveTo: null });
+      setRecurringName(''); setRecurringAmount(''); setRecurringFrequency(ExpenseFrequency.MONTHLY); setShowAddRecurring(false);
       await loadData(); await loadAssets();
     } catch (err) {
       toast.show(`添加失败: ${(err as Error).message}`, 'error');
@@ -362,6 +388,31 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
           </View>
         </View>
 
+        {/* Live Metal Price Reference (贵金属实时参考价) */}
+        {metalPrices && asset.weightGrams ? (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>实时参考价</Text>
+            <View style={[styles.infoCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <InfoRow label="黄金" value={`${formatCurrency(metalPrices.goldPerGram, currencySymbol)}/克`} theme={theme} />
+              <InfoRow label="白银" value={`${formatCurrency(metalPrices.silverPerGram, currencySymbol)}/克`} theme={theme} />
+              <InfoRow
+                label={`按金价市值（${asset.weightGrams}g）`}
+                value={formatCurrency(metalPrices.goldPerGram * asset.weightGrams, currencySymbol)}
+                theme={theme}
+              />
+              <InfoRow
+                label={`按银价市值（${asset.weightGrams}g）`}
+                value={formatCurrency(metalPrices.silverPerGram * asset.weightGrams, currencySymbol)}
+                theme={theme}
+              />
+              <Text style={[styles.metalNote, { color: theme.colors.tertiary }]}>
+                {metalPrices.stale ? '缓存于' : '更新于'} {formatTimeHM(metalPrices.fetchedAt)}
+                {metalPrices.stale ? '（当前无法联网）' : ''} · 国际现货折算，仅供估价参考
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         {/* Valuation Chart */}
         {asset.valuationTracking ? (
           <View style={styles.section}>
@@ -400,7 +451,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
           {recurring.length > 0 ? recurring.map(re => (
             <View key={re.id} style={[styles.subRow, { borderBottomColor: theme.colors.outline }]}>
               <Text style={[styles.subName, { color: theme.colors.onSurface }]}>{re.name}</Text>
-              <Text style={[styles.subAmount, { color: theme.colors.onSurface }]}>{formatCurrency(re.amount, currencySymbol)}/月</Text>
+              <Text style={[styles.subAmount, { color: theme.colors.onSurface }]}>{formatCurrency(re.amount, currencySymbol)}{ExpenseFrequencySuffixes[re.frequency ?? ExpenseFrequency.MONTHLY]}</Text>
               <Text style={[styles.subPeriod, { color: theme.colors.tertiary }]}>{re.effectiveFrom.substring(0, 7)} ~ {re.effectiveTo ? re.effectiveTo.substring(0, 7) : '至今'}</Text>
               {isActive && <AppButton title="✕" variant="text" compact onPress={() => setDeleteRecurringTarget(re)} />}
             </View>
@@ -411,6 +462,17 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
             <View style={[styles.inlineForm, { backgroundColor: theme.colors.surfaceVariant }]}>
               <AppTextInput bottomSheet label="名称(如话费)" value={recurringName} onChangeText={setRecurringName} />
               <AppTextInput bottomSheet label="金额" value={recurringAmount} onChangeText={setRecurringAmount} keyboardType="decimal-pad" />
+              <View style={styles.chipRow}>
+                {Object.values(ExpenseFrequency).map(freq => (
+                  <AppChip
+                    key={freq}
+                    label={ExpenseFrequencyLabels[freq]}
+                    selected={recurringFrequency === freq}
+                    onPress={() => setRecurringFrequency(freq)}
+                    compact
+                  />
+                ))}
+              </View>
               <DatePickerField label="生效日期" value={recurringFrom} onChange={setRecurringFrom} />
               <AppButton title="确认添加" variant="primary" compact onPress={handleAddRecurring} style={{ alignSelf: 'flex-start' }} />
             </View>
@@ -615,7 +677,23 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
       <AppBottomSheet visible={showValuationInput} onClose={() => setShowValuationInput(false)} snapPoints={['40%']}>
         <Text style={[styles.valTitle, { color: theme.colors.onSurface }]}>更新估值</Text>
         <Text style={[styles.valSubtitle, { color: theme.colors.onSurfaceVariant }]}>{asset?.name}</Text>
-        <AppTextInput bottomSheet label="输入当前估值" value={newValuation} onChangeText={setNewValuation} keyboardType="decimal-pad" autoFocus />
+        {asset?.weightGrams && metalPrices ? (
+          <View style={[styles.chipRow, { marginBottom: 12 }]}>
+            <AppButton
+              title="按金价填入"
+              variant="secondary"
+              compact
+              onPress={() => setNewValuation(String(Math.round(metalPrices.goldPerGram * (asset.weightGrams ?? 0))))}
+            />
+            <AppButton
+              title="按银价填入"
+              variant="secondary"
+              compact
+              onPress={() => setNewValuation(String(Math.round(metalPrices.silverPerGram * (asset.weightGrams ?? 0))))}
+            />
+          </View>
+        ) : null}
+        <AppTextInput bottomSheet label="输入当前估值" value={newValuation} onChangeText={setNewValuation} keyboardType="decimal-pad" autoFocus={!asset?.weightGrams} />
         <View style={styles.valActions}>
           <AppButton title="取消" variant="text" onPress={() => setShowValuationInput(false)} style={{ flex: 1 }} />
           <AppButton title="保存" variant="primary" onPress={handleUpdateValuation} style={{ flex: 1 }} />
@@ -698,6 +776,14 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
   );
 }
 
+/** Format an ISO timestamp as local "M-DD HH:mm" (no Intl dependency) */
+function formatTimeHM(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '--';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Human-readable amortization description — hides technical strategy names */
 function describeAmortization(asset: Asset): string {
   switch (asset.amortizationType) {
@@ -767,6 +853,8 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   emptySubtext: { fontSize: 13, paddingVertical: 8 },
   inlineForm: { marginTop: 8, gap: 8, padding: 12, borderRadius: radius.sm },
+  chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  metalNote: { fontSize: 11, marginTop: 6, lineHeight: 16 },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   switchLabel: { fontSize: 14 },
   valTitle: { fontSize: 20, fontWeight: '700', marginBottom: 4 },

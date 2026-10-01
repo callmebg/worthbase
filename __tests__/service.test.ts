@@ -189,6 +189,8 @@ describe('ExportService', () => {
     const data = JSON.parse(writeCall[1]);
     expect(data.recurringExpenses).toHaveLength(1);
     expect(data.recurringExpenses[0].name).toBe('保险费');
+    // Created without explicit frequency (old caller style) → persisted as monthly
+    expect(data.recurringExpenses[0].frequency).toBe('monthly');
     expect(data.maintenanceRecords).toHaveLength(1);
     expect(data.maintenanceRecords[0].name).toBe('换屏');
   });
@@ -365,6 +367,46 @@ describe('ImportService', () => {
     expect(assets[0].expectedLifespanMonths).toBe(36);
     expect(assets[0].residualValue).toBe(3000);
     expect(assets[0].currentValuation).toBe(12000);
+  });
+
+  test('importReplace: recurring expenses default to monthly for old backups, keep explicit frequency', async () => {
+    const importData = {
+      version: 1,
+      accounts: [],
+      assets: [
+        {
+          id: 'old-asset-1', name: '金条', category: AssetCategory.PRECIOUS_METAL,
+          purchaseDate: '2025-01-01', purchasePrice: 50000,
+          amortizationType: AmortizationType.NO_AMORTIZATION, expectedLifespanMonths: null,
+          residualValue: null, valuationTracking: false, currentValuation: null,
+          status: AssetStatus.ACTIVE, sellDate: null, sellPrice: null, weightGrams: 100, imagePath: null,
+        },
+      ],
+      balanceSnapshots: [],
+      recurringExpenses: [
+        // Old backup entry: no frequency field
+        { id: 'old-re-1', assetId: 'old-asset-1', name: '保管费', amount: 120, effectiveFrom: '2025-01', effectiveTo: null },
+        // New entry: explicit yearly + an invalid value that should fall back
+        { id: 'old-re-2', assetId: 'old-asset-1', name: '年费', amount: 1200, frequency: 'yearly', effectiveFrom: '2025-01', effectiveTo: null },
+        { id: 'old-re-3', assetId: 'old-asset-1', name: '异常', amount: 60, frequency: 'weekly', effectiveFrom: '2025-01', effectiveTo: null },
+      ],
+      maintenanceRecords: [],
+      valuationHistory: [],
+      settings: null,
+    };
+    mockFiles.set('/test/old-backup.json', JSON.stringify(importData));
+
+    await ImportService.importReplace('/test/old-backup.json');
+
+    const assets = await AssetRepository.getAll();
+    expect(assets).toHaveLength(1);
+    const { RecurringExpenseRepository } = require('@/db/recurring-expense-repository');
+    const expenses = await RecurringExpenseRepository.getByAsset(assets[0].id);
+    expect(expenses).toHaveLength(3);
+    const byName: Record<string, any> = Object.fromEntries(expenses.map((e: any) => [e.name, e]));
+    expect(byName['保管费'].frequency).toBe('monthly');
+    expect(byName['年费'].frequency).toBe('yearly');
+    expect(byName['异常'].frequency).toBe('monthly');
   });
 });
 

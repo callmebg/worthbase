@@ -6,7 +6,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_VERSION = 9;
+const CURRENT_VERSION = 10;
 
 interface Migration {
   version: number;
@@ -144,6 +144,21 @@ const migrations: Migration[] = [
       if (!hasColumn) {
         await db.execAsync(`
           ALTER TABLE assets ADD COLUMN icon TEXT;
+        `);
+      }
+    },
+  },
+  // Version 10: Add frequency column to recurring_expenses (monthly/quarterly/yearly billing)
+  {
+    version: 10,
+    description: 'Add frequency column to recurring_expenses for yearly/quarterly billing',
+    up: async (db: SQLiteDatabase) => {
+      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(recurring_expenses);');
+      const hasColumn = columns.some((column) => column.name === 'frequency');
+
+      if (!hasColumn) {
+        await db.execAsync(`
+          ALTER TABLE recurring_expenses ADD COLUMN frequency TEXT NOT NULL DEFAULT 'monthly';
         `);
       }
     },

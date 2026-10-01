@@ -20,6 +20,8 @@ import type { Asset } from '@/types/models';
 import { ProjectionCalculator } from '@/engine/ProjectionCalculator';
 import { NetWorthCalculator } from '@/engine/NetWorthCalculator';
 import { recommendAmortization } from '@/engine/AmortizationRecommender';
+import { toMonthlyAmount } from '@/engine/RecurringExpenseCalculator';
+import { ExpenseFrequency } from '@/types/enums';
 
 // ─── Helper: create a test asset ───
 function makeAsset(overrides: Partial<Asset> = {}): Asset {
@@ -255,6 +257,25 @@ describe('Recurring expense interval logic', () => {
     expect('2025-01' < '2025-06').toBe(true);
     expect('2025-06' < '2026-01').toBe(true);
     expect('2025-12' < '2026-01').toBe(true);
+  });
+});
+
+// ─── Recurring expense frequency normalization tests ───
+describe('Recurring expense frequency normalization', () => {
+  test('monthly amount is unchanged', () => {
+    expect(toMonthlyAmount({ amount: 50, frequency: ExpenseFrequency.MONTHLY })).toBe(50);
+  });
+
+  test('quarterly amount divides by 3', () => {
+    expect(toMonthlyAmount({ amount: 900, frequency: ExpenseFrequency.QUARTERLY })).toBe(300);
+  });
+
+  test('yearly amount divides by 12 (车险 3000/年 → 250/月)', () => {
+    expect(toMonthlyAmount({ amount: 3000, frequency: ExpenseFrequency.YEARLY })).toBe(250);
+  });
+
+  test('unknown frequency falls back to monthly divisor', () => {
+    expect(toMonthlyAmount({ amount: 3000, frequency: 'weekly' as ExpenseFrequency })).toBe(3000);
   });
 });
 

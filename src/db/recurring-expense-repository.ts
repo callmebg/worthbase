@@ -5,12 +5,14 @@
 
 import { getDatabase, generateId } from './client';
 import type { RecurringExpense } from '@/types/models';
+import { ExpenseFrequency } from '@/types/enums';
 
 interface RecurringExpenseRow {
   id: string;
   asset_id: string;
   name: string;
   amount: number;
+  frequency: string | null;
   effective_from: string;
   effective_to: string | null;
   ended_reason: string | null;
@@ -23,6 +25,7 @@ function rowToRecurringExpense(row: RecurringExpenseRow): RecurringExpense {
     assetId: row.asset_id,
     name: row.name,
     amount: row.amount,
+    frequency: (row.frequency as ExpenseFrequency) ?? ExpenseFrequency.MONTHLY,
     effectiveFrom: row.effective_from,
     effectiveTo: row.effective_to,
     endedReason: row.ended_reason as RecurringExpense['endedReason'],
@@ -84,11 +87,11 @@ export const RecurringExpenseRepository = {
     const now = new Date().toISOString();
     const id = generateId();
     await db.runAsync(
-      `INSERT INTO recurring_expenses (id, asset_id, name, amount, effective_from, effective_to, ended_reason, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
-      id, expense.assetId, expense.name, expense.amount, expense.effectiveFrom, expense.effectiveTo, null, now
+      `INSERT INTO recurring_expenses (id, asset_id, name, amount, frequency, effective_from, effective_to, ended_reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      id, expense.assetId, expense.name, expense.amount, expense.frequency ?? ExpenseFrequency.MONTHLY, expense.effectiveFrom, expense.effectiveTo, null, now
     );
-    return { ...expense, id, endedReason: null, createdAt: now };
+    return { ...expense, frequency: expense.frequency ?? ExpenseFrequency.MONTHLY, id, endedReason: null, createdAt: now };
   },
 
   async update(id: string, updates: Partial<RecurringExpense>): Promise<void> {
@@ -98,6 +101,7 @@ export const RecurringExpenseRepository = {
 
     if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
     if (updates.amount !== undefined) { fields.push('amount = ?'); values.push(updates.amount); }
+    if (updates.frequency !== undefined) { fields.push('frequency = ?'); values.push(updates.frequency); }
     if (updates.effectiveFrom !== undefined) { fields.push('effective_from = ?'); values.push(updates.effectiveFrom); }
     if (updates.effectiveTo !== undefined) { fields.push('effective_to = ?'); values.push(updates.effectiveTo); }
     if (updates.endedReason !== undefined) { fields.push('ended_reason = ?'); values.push(updates.endedReason); }

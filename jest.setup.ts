@@ -3,6 +3,9 @@
 // Enable React act() environment for React 19
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
+// RN dev flag — used by components for dev-only warnings (undefined under ts-jest otherwise)
+(globalThis as any).__DEV__ = true;
+
 // ─── Full react-native mock (no jest.requireActual to avoid ESM issues) ───
 jest.mock('react-native', () => {
   const React = jest.requireActual('react');

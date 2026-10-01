@@ -13,7 +13,7 @@ import { MaintenanceRepository } from '@/db/maintenance-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { getDatabase } from '@/db/client';
-import { AccountType, AssetCategory, AmortizationType, AssetStatus } from '@/types/enums';
+import { AccountType, AssetCategory, AmortizationType, AssetStatus, ExpenseFrequency } from '@/types/enums';
 
 interface ImportData {
   version?: number;
@@ -124,12 +124,16 @@ export const ImportService = {
       }
 
       // Import recurring expenses — remap assetId
+      // frequency falls back to monthly for backups exported before v1.7 (no frequency field)
       if (data.recurringExpenses) {
         for (const re of data.recurringExpenses) {
           const newAssetId = assetIdMap.get(re.assetId);
           if (!newAssetId) continue;
           await RecurringExpenseRepository.create({
             assetId: newAssetId, name: re.name, amount: re.amount,
+            frequency: Object.values(ExpenseFrequency).includes(re.frequency)
+              ? (re.frequency as ExpenseFrequency)
+              : ExpenseFrequency.MONTHLY,
             effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo ?? null,
           });
         }
