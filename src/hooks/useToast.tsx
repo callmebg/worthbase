@@ -2,27 +2,25 @@
  * WorthBase (家底) - Toast Feedback System
  * React Context + Provider pattern for transient user feedback.
  * success: 2000ms, error: 4000ms, info: 2000ms
+ *
+ * context / 类型 / useToast 已下沉到 ./toast-context，本文件只保留 Provider ——
+ * 否则会与 @/components/ui/Toast 形成 require cycle（原因见 toast-context.ts 顶部）。
+ * 下方的 re-export 保证既有 `from '@/hooks/useToast'` 的十余处引用无需改动。
  */
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ToastRenderer } from '@/components/ui/Toast';
+import {
+  ToastContext,
+  useToast,
+  type ToastContextValue,
+  type ToastState,
+  type ToastType,
+} from './toast-context';
 
-export type ToastType = 'success' | 'error' | 'info';
-
-interface ToastState {
-  visible: boolean;
-  message: string;
-  type: ToastType;
-  duration: number;
-}
-
-interface ToastContextValue {
-  show: (message: string, type?: ToastType, duration?: number) => void;
-  state: ToastState;
-  hide: () => void;
-}
-
-const ToastContext = createContext<ToastContextValue | undefined>(undefined);
+// 兼容既有引用路径（含 src/components/ui/index.ts 的再导出）
+export { useToast };
+export type { ToastContextValue, ToastState, ToastType };
 
 const DEFAULT_DURATION: Record<ToastType, number> = {
   success: 2000,
@@ -67,12 +65,4 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <ToastRenderer />
     </ToastContext.Provider>
   );
-}
-
-export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext);
-  if (!ctx) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return ctx;
 }

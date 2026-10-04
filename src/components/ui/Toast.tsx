@@ -7,8 +7,9 @@
 
 import React from 'react';
 import { Snackbar } from 'react-native-paper';
-import { useToast } from '@/hooks/useToast';
-import type { ToastType } from '@/hooks/useToast';
+// 直接从 toast-context 取，不要从 @/hooks/useToast 取 ——
+// 后者的 Provider 要渲染本文件的 ToastRenderer，反向 import 会形成 require cycle。
+import { useToast, type ToastType } from '@/hooks/toast-context';
 import { useAppTheme } from '@/utils/format';
 
 /** Map toast type → theme color key */
