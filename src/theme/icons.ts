@@ -4,9 +4,7 @@
  * Also provides icon category metadata for the icon picker and icon resolution utilities.
  */
 
-import { AccountType } from '@/types/enums';
-import { AssetCategory } from '@/types/enums';
-import { AssetStatus } from '@/types/enums';
+import { AccountType, AssetCategory, AssetStatus } from '@/types/enums';
 import { ALL_ICON_NAMES } from '@/components/ui/Icon';
 
 /** Tab bar icons */

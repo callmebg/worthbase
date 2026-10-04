@@ -1,0 +1,2 @@
+# 脚本必须在 Linux CI 上以 LF 检出，否则 bash 会报 bad interpreter: /usr/bin/env bash
+*.sh text eol=lf

@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { useAppTheme } from '@/utils/format';
+import { useAppTheme, formatCurrency, formatCompactCurrency, getMonthsHeld } from '@/utils/format';
 import { useFocusEffect } from 'expo-router';
 import { useAssetStore } from '@/stores/asset-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -32,7 +32,6 @@ import {
 } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS, ASSET_STATUS_ICONS, resolveAssetIcon } from '@/theme/icons';
 import type { Asset, HoldingCostResult, UsageResult } from '@/types/models';
-import { formatCurrency, formatCompactCurrency, getMonthsHeld } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';

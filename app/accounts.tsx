@@ -13,15 +13,14 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { useAppTheme } from '@/utils/format';
+import { useAppTheme, formatCurrency, formatDate } from '@/utils/format';
 import { useAccountStore } from '@/stores/account-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
-import { AccountType, AccountTypeLabels } from '@/types/enums';
+import { AccountType, AccountTypeLabels, LIABILITY_ACCOUNT_TYPES } from '@/types/enums';
 import { ACCOUNT_TYPE_ICONS, resolveAccountIcon } from '@/theme/icons';
 import { IconPickerSheet } from '@/components/IconPickerSheet';
 import type { Account } from '@/types/models';
-import { formatCurrency, formatDate } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppButton } from '@/components/ui/Button';
 import { AppTextInput } from '@/components/ui/TextInput';
@@ -30,7 +29,6 @@ import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { Icon } from '@/components/ui/Icon';
 import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { isValidNumber } from '@/utils/validation';
-import { LIABILITY_ACCOUNT_TYPES } from '@/types/enums';
 import { useToast } from '@/hooks/useToast';
 import { FORTUNES } from '@/utils/fortunes';
 import { spacing } from '@/theme/tokens';
@@ -466,11 +464,7 @@ function BalanceHistorySheet({ visible, onClose }: {
   const { currencySymbol } = useSettingsStore();
   const [dates, setDates] = useState<{ date: string; balances: { accountId: string; balance: number }[] }[]>([]);
 
-  useEffect(() => {
-    if (visible) loadHistory();
-  }, [visible]);
-
-  const loadHistory = async () => {
+  async function loadHistory() {
     const allDates = await BalanceSnapshotRepository.getAllSnapshotDates();
     const history = await Promise.all(
       allDates.slice(0, 30).map(async date => ({
@@ -481,7 +475,13 @@ function BalanceHistorySheet({ visible, onClose }: {
       }))
     );
     setDates(history);
-  };
+  }
+
+  // effect 必须写在 loadHistory 之后：react-hooks/immutability 按源码顺序检查，
+  // 不认 function 声明的 hoisting，先引用会报「声明前访问」
+  useEffect(() => {
+    if (visible) loadHistory();
+  }, [visible]);
 
   return (
     <AppBottomSheet visible={visible} onClose={onClose} snapPoints={['60%', '85%']}>
@@ -688,11 +688,7 @@ function AccountHistorySheet({ account, onClose }: {
   const { currencySymbol } = useSettingsStore();
   const [snapshots, setSnapshots] = useState<{ date: string; balance: number }[]>([]);
 
-  useEffect(() => {
-    if (account) loadSnapshots(account.id);
-  }, [account]);
-
-  const loadSnapshots = async (accountId: string) => {
+  async function loadSnapshots(accountId: string) {
     const allDates = await BalanceSnapshotRepository.getAllSnapshotDates();
     const result: { date: string; balance: number }[] = [];
     for (const date of allDates) {
@@ -703,7 +699,12 @@ function AccountHistorySheet({ account, onClose }: {
       }
     }
     setSnapshots(result);
-  };
+  }
+
+  // 同上：必须写在 loadSnapshots 之后
+  useEffect(() => {
+    if (account) loadSnapshots(account.id);
+  }, [account]);
 
   if (!account) return null;
 

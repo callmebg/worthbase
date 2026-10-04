@@ -6,8 +6,7 @@
 
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { TextInput as PaperTextInput, Text } from 'react-native-paper';
-import { useTheme } from 'react-native-paper';
+import { TextInput as PaperTextInput, Text, useTheme } from 'react-native-paper';
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { radius } from '@/theme/tokens';
 

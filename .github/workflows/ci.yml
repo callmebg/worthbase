@@ -1,17 +1,69 @@
 name: CI
 
+# 改动理由（2026-10-04）：
+#   原来只有 workflow_dispatch —— push 和 PR 根本不触发，而 CONTRIBUTING.md 却写着
+#   「所有 CI 检查通过」，等于门禁形同虚设。
+#   另外原来 `./gradlew assembleRelease || (echo "..."; exit 0)` 会把构建失败吞成成功，
+#   CI 永远是绿的。现在两者都修掉。
 on:
+  push:
+    branches: ['**']
+  pull_request:
   workflow_dispatch:
 
 permissions: read-all
+
+# 同一分支的新推送取消仍在跑的旧任务，省 CI 分钟
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CI: true
 
 jobs:
-  test-and-local-build:
-    name: Test, install Android SDK, local Android build and upload artifacts
+  # ─── 快速门禁：不需要 Android SDK，1~2 分钟内给出结论 ───
+  gates:
+    name: Gates (version / typecheck / lint / test)
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 让 check-version 能看到 tag
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # 三处版本号必须一致（package.json / app.json / build.gradle）
+      - name: Check version consistency
+        run: npm run check:version
+
+      # tsc 必须零错误。项目已不存在「可忽略的历史 TS 错误」，
+      # 不要用 @ts-ignore 或重新引入豁免清单来让它变绿。
+      - name: Type check
+        run: npm run typecheck
+
+      # error 直接失败；warning 有棘轮上限（见 package.json 的 lint:ci），只许减不许增
+      - name: Lint
+        run: npm run lint:ci
+
+      - name: Run tests
+        run: npm test
+
+  # ─── Android 构建：慢（要装 SDK），所以放在门禁之后，且 PR 上不跑 ───
+  android-build:
+    name: Android release build
+    runs-on: ubuntu-latest
+    needs: gates
+    if: github.event_name != 'pull_request'
 
     steps:
       - name: Checkout repository
@@ -31,9 +83,6 @@ jobs:
 
       - name: Install npm dependencies
         run: npm ci
-
-      - name: Run tests
-        run: npm test
 
       - name: Restore Android SDK subdirs cache
         uses: actions/cache@v4
@@ -84,14 +133,6 @@ jobs:
             ${{ runner.temp }}/android-sdk/platform-tools
           key: android-sdk-${{ runner.os }}-v1
 
-      - name: Show sdkmanager info
-        env:
-          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
-        run: |
-          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
-          sdkmanager --list --sdk_root="$ANDROID_SDK_ROOT" || true
-
       - name: Prebuild Android (generate native project)
         run: npx expo prebuild --platform android --non-interactive
 
@@ -111,6 +152,8 @@ jobs:
             chmod +x android/gradlew
           fi
 
+      # 关键修正：不再 `|| exit 0` 吞掉失败。构建坏了这里就必须红。
+      # gradlew 缺失同样视为失败（prebuild 本该生成它），不再静默跳过。
       - name: Build Android release APK (local)
         env:
           ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
@@ -119,14 +162,14 @@ jobs:
         working-directory: android
         run: |
           set -e
-          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
+          export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
-          if [ -f gradlew ]; then
-            echo "Starting local Gradle build..."
-            ./gradlew assembleRelease || (echo "Gradle build failed"; exit 0)
-          else
-            echo "No android/gradlew found — skipping Gradle build.";
+          if [ ! -f gradlew ]; then
+            echo "::error::android/gradlew 不存在 —— expo prebuild 未生成原生工程"
+            exit 1
           fi
+          echo "Starting local Gradle build..."
+          ./gradlew assembleRelease --stacktrace
 
       - name: Save Gradle cache
         if: always()
@@ -137,21 +180,27 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle/wrapper/gradle-wrapper.properties') }}
 
-      - name: Upload APK artifact if exists
+      - name: Verify APK was produced
+        run: |
+          set -e
+          if ! ls android/app/build/outputs/apk/release/*.apk >/dev/null 2>&1; then
+            echo "::error::Gradle 报告成功但没有产出 APK"
+            exit 1
+          fi
+          ls -la android/app/build/outputs/apk/release/
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/apk/*/*/*.apk
-          if-no-files-found: warn
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
 
-      - name: Upload generated android project (fallback)
+      # 仅在失败时上传原生工程，便于排查（原来是无条件上传，噪音大）
+      - name: Upload generated android project (debug only)
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: android-project
           path: android
           if-no-files-found: warn
-
-      - name: Finish
-        run: echo "Workflow finished. Check uploaded artifacts for APKs or the generated android project."

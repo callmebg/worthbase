@@ -4,14 +4,13 @@
  * Provides search, category browsing, and a 4-column icon grid.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { AppButton } from '@/components/ui/Button';
-import { Icon } from '@/components/ui/Icon';
-import { ALL_ICON_NAMES } from '@/components/ui/Icon';
+import { Icon, ALL_ICON_NAMES } from '@/components/ui/Icon';
 import { ICON_CATEGORIES } from '@/theme/icons';
 import { radius } from '@/theme/tokens';
 
@@ -77,7 +76,9 @@ export function IconPickerSheet({
   };
 
   // Sync selectedIcon when currentIcon changes
-  useMemo(() => {
+  // 必须用 useEffect：useMemo 在渲染期执行，在其中 setState 属于「渲染期更新」，
+  // 会触发 React 警告并可能死循环（eslint react-hooks/set-state-in-render）。
+  useEffect(() => {
     setSelectedIcon(currentIcon);
   }, [currentIcon]);
 

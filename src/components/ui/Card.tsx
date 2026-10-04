@@ -5,8 +5,7 @@
 
 import React from 'react';
 import { StyleSheet, ViewStyle } from 'react-native';
-import { Card as PaperCard } from 'react-native-paper';
-import { useTheme } from 'react-native-paper';
+import { Card as PaperCard, useTheme } from 'react-native-paper';
 import { radius } from '@/theme/tokens';
 
 interface AppCardProps {

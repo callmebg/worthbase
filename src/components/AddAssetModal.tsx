@@ -10,7 +10,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity,
 } from 'react-native';
-import { useAppTheme } from '@/utils/format';
+import { useAppTheme, getCurrentDate } from '@/utils/format';
 import { DatePickerField } from './DatePickerField';
 import { useAssetStore } from '@/stores/asset-store';
 import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
@@ -23,7 +23,6 @@ import {
 import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
 import { IconPickerSheet } from '@/components/IconPickerSheet';
 import type { Asset, RecurringExpense, MaintenanceRecord } from '@/types/models';
-import { getCurrentDate } from '@/utils/format';
 import { isValidPositiveNumber, isValidDate } from '@/utils/validation';
 import { useToast } from '@/hooks/useToast';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';

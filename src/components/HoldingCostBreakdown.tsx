@@ -5,9 +5,8 @@
  */
 
 import { View, Text, StyleSheet } from 'react-native';
-import { useAppTheme } from '@/utils/format';
+import { useAppTheme, formatCurrency } from '@/utils/format';
 import type { HoldingCostResult } from '@/types/models';
-import { formatCurrency } from '@/utils/format';
 import { radius } from '@/theme/tokens';
 
 export function HoldingCostBreakdown({ result, currencySymbol = '¥' }: {

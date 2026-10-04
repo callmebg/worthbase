@@ -5,8 +5,7 @@
 
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { Button as PaperButton } from 'react-native-paper';
-import { useTheme } from 'react-native-paper';
+import { Button as PaperButton, useTheme } from 'react-native-paper';
 import { Icon } from './Icon';
 import { radius } from '@/theme/tokens';
 

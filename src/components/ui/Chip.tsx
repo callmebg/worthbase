@@ -5,8 +5,7 @@
 
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { Chip as PaperChip } from 'react-native-paper';
-import { useTheme } from 'react-native-paper';
+import { Chip as PaperChip, useTheme } from 'react-native-paper';
 import { Icon } from './Icon';
 import { radius } from '@/theme/tokens';
 

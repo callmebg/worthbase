@@ -24,7 +24,7 @@ export function OnboardingView() {
       <Text style={[styles.desc, { color: theme.colors.onSurfaceVariant }]}>
         记录你的账户余额和实物资产，{'\n'}
         了解净资产趋势和持有成本，{'\n'}
-        回答"我到底有多少钱"和"养这些东西每月花多少钱"。
+        回答“我到底有多少钱”和“养这些东西每月花多少钱”。
       </Text>
 
       <View style={styles.features}>

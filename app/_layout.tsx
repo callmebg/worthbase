@@ -5,11 +5,11 @@
  * Tab order: 总览(Dashboard) / 账户(Accounts) / 资产(Assets) / 设置(Settings)
  */
 
-import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Tabs } from 'expo-router';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, AppState } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 import { useTheme } from 'react-native-paper';
 import { LayoutDashboard, Wallet, Package, Settings } from 'lucide-react-native';
 import { useDatabaseInit } from '@/hooks/useDatabaseInit';

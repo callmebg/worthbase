@@ -15,13 +15,13 @@ import { ExpectedLifespanStrategy } from '@/engine/strategies/ExpectedLifespanSt
 import { ResidualValueStrategy } from '@/engine/strategies/ResidualValueStrategy';
 import { NoAmortizationStrategy } from '@/engine/strategies/NoAmortizationStrategy';
 import { getStrategy, getStrategyByType } from '@/engine/strategies';
-import { AmortizationType, AssetStatus, AssetCategory } from '@/types/enums';
+import { AmortizationType, AssetStatus, AssetCategory, ExpenseFrequency } from '@/types/enums';
 import type { Asset } from '@/types/models';
 import { ProjectionCalculator } from '@/engine/ProjectionCalculator';
 import { NetWorthCalculator } from '@/engine/NetWorthCalculator';
 import { recommendAmortization } from '@/engine/AmortizationRecommender';
 import { toMonthlyAmount } from '@/engine/RecurringExpenseCalculator';
-import { ExpenseFrequency } from '@/types/enums';
+
 
 // ─── Helper: create a test asset ───
 function makeAsset(overrides: Partial<Asset> = {}): Asset {

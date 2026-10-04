@@ -5,12 +5,11 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useAppTheme } from '@/utils/format';
+import { useAppTheme, formatCurrency } from '@/utils/format';
 import { AppBottomSheet } from '@/components/ui';
 import { Icon } from '@/components/ui/Icon';
 import { spacing, radius } from '@/theme/tokens';
 import type { ProjectionDetail } from '@/engine/ProjectionCalculator';
-import { formatCurrency } from '@/utils/format';
 
 interface GoalProjectionExplainerProps {
   visible: boolean;

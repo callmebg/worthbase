@@ -6,10 +6,9 @@
 
 import { useEffect, useState } from 'react';
 import { View, Text, Dimensions, StyleSheet } from 'react-native';
-import { useAppTheme } from '@/utils/format';
+import { useAppTheme, formatCurrency } from '@/utils/format';
 import { LineChart } from 'react-native-chart-kit';
 import { ValuationRepository } from '@/db/valuation-repository';
-import { formatCurrency } from '@/utils/format';
 import { Icon } from '@/components/ui/Icon';
 
 const screenWidth = Dimensions.get('window').width;

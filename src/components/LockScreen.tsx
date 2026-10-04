@@ -45,13 +45,13 @@ export function LockScreen({ onUnlocked, themeColor }: LockScreenProps) {
   }, []);
 
   // Try biometric on mount if enabled
-  useEffect(() => {
-    if (biometricEnabled) {
-      tryBiometric();
-    }
-  }, [biometricEnabled]);
+  // 注意：本 effect 必须写在 tryBiometric 定义之后（见下方），
+  // react-hooks/immutability 按源码顺序检查，不认 hoisting。
 
   const shake = useCallback(() => {
+    // Reanimated 的 shared value 就是靠给 .value 赋值来驱动动画的，这是官方唯一用法。
+    // React Compiler 的 immutability 规则不理解这种可变 ref API，属误报。
+    // eslint-disable-next-line react-hooks/immutability
     shakeX.value = withSequence(
       withTiming(10, { duration: 50, easing: Easing.linear }),
       withTiming(-10, { duration: 50, easing: Easing.linear }),
@@ -66,14 +66,21 @@ export function LockScreen({ onUnlocked, themeColor }: LockScreenProps) {
     transform: [{ translateX: shakeX.value }],
   }));
 
-  const tryBiometric = async () => {
+  const tryBiometric = useCallback(async () => {
     setIsAuthenticating(true);
     const success = await AuthService.authenticateWithBiometric();
     setIsAuthenticating(false);
     if (success) {
       onUnlocked();
     }
-  };
+  }, [onUnlocked]);
+
+  // 挂载后若已开启生物识别则自动尝试（必须位于 tryBiometric 之后）
+  useEffect(() => {
+    if (biometricEnabled) {
+      tryBiometric();
+    }
+  }, [biometricEnabled, tryBiometric]);
 
   const handlePinSubmit = async () => {
     if (pin.length < 4) {

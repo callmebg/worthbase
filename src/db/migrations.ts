@@ -30,7 +30,7 @@ const migrations: Migration[] = [
     version: 2,
     description: 'Add deleted_at column to accounts for soft delete',
     up: async (db: SQLiteDatabase) => {
-      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(accounts);');
+      const columns: { name: string }[] = await db.getAllAsync('PRAGMA table_info(accounts);');
       const hasDeletedAt = columns.some((column) => column.name === 'deleted_at');
 
       if (!hasDeletedAt) {
@@ -45,7 +45,7 @@ const migrations: Migration[] = [
     version: 3,
     description: 'Add ended_reason column and deleted_at index',
     up: async (db: SQLiteDatabase) => {
-      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(recurring_expenses);');
+      const columns: { name: string }[] = await db.getAllAsync('PRAGMA table_info(recurring_expenses);');
       const hasEndedReason = columns.some((column) => column.name === 'ended_reason');
 
       if (!hasEndedReason) {
@@ -64,7 +64,7 @@ const migrations: Migration[] = [
     version: 4,
     description: 'Add weight_grams column to assets for precious metals',
     up: async (db: SQLiteDatabase) => {
-      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(assets);');
+      const columns: { name: string }[] = await db.getAllAsync('PRAGMA table_info(assets);');
       const hasWeightGrams = columns.some((column) => column.name === 'weight_grams');
 
       if (!hasWeightGrams) {
@@ -108,7 +108,7 @@ const migrations: Migration[] = [
     version: 7,
     description: 'Add usage_tracking column to assets for cost-per-use opt-in',
     up: async (db: SQLiteDatabase) => {
-      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(assets);');
+      const columns: { name: string }[] = await db.getAllAsync('PRAGMA table_info(assets);');
       const hasColumn = columns.some((column) => column.name === 'usage_tracking');
 
       if (!hasColumn) {
@@ -123,7 +123,7 @@ const migrations: Migration[] = [
     version: 8,
     description: 'Add initial_use_count column to assets for custom initial use count',
     up: async (db: SQLiteDatabase) => {
-      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(assets);');
+      const columns: { name: string }[] = await db.getAllAsync('PRAGMA table_info(assets);');
       const hasColumn = columns.some((column) => column.name === 'initial_use_count');
 
       if (!hasColumn) {
@@ -138,7 +138,7 @@ const migrations: Migration[] = [
     version: 9,
     description: 'Add icon column to assets for custom Lucide icon selection',
     up: async (db: SQLiteDatabase) => {
-      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(assets);');
+      const columns: { name: string }[] = await db.getAllAsync('PRAGMA table_info(assets);');
       const hasColumn = columns.some((column) => column.name === 'icon');
 
       if (!hasColumn) {
@@ -153,7 +153,7 @@ const migrations: Migration[] = [
     version: 10,
     description: 'Add frequency column to recurring_expenses for yearly/quarterly billing',
     up: async (db: SQLiteDatabase) => {
-      const columns: Array<{ name: string }> = await db.getAllAsync('PRAGMA table_info(recurring_expenses);');
+      const columns: { name: string }[] = await db.getAllAsync('PRAGMA table_info(recurring_expenses);');
       const hasColumn = columns.some((column) => column.name === 'frequency');
 
       if (!hasColumn) {

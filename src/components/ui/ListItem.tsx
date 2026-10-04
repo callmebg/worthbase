@@ -5,8 +5,7 @@
 
 import React from 'react';
 import { StyleSheet, View, Switch, Text as RNText } from 'react-native';
-import { List } from 'react-native-paper';
-import { useTheme } from 'react-native-paper';
+import { List, useTheme } from 'react-native-paper';
 import { Icon } from './Icon';
 
 interface AppListItemProps {
@@ -52,18 +51,23 @@ export function AppListItem({
 }: AppListItemProps) {
   const theme = useTheme();
 
+  // Paper 的 left/right 需要「组件」而非元素。用具名函数表达式：
+  // 既满足 react/display-name（有名字），又不会像 `C.displayName = ...` 那样
+  // 触发 react-hooks/immutability（修改渲染期创建的值）。
   const renderLeft = () => {
     if (!icon) return undefined;
-    return () => (
-      <View style={styles.iconContainer}>
-        <Icon name={icon} size={22} color={iconColor || 'onSurfaceVariant'} />
-      </View>
-    );
+    return function AppListItemLeft() {
+      return (
+        <View style={styles.iconContainer}>
+          <Icon name={icon} size={22} color={iconColor || 'onSurfaceVariant'} />
+        </View>
+      );
+    };
   };
 
   const renderRight = () => {
     if (!rightElement) return undefined;
-    return () => {
+    return function AppListItemRight() {
       switch (rightElement) {
         case 'chevron':
           return <Icon name="ChevronRight" size={18} color="onSurfaceVariant" />;

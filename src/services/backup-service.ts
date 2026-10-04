@@ -4,13 +4,13 @@
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
+import { getDatabase } from '@/db/client';
 const documentDirectory = (FileSystem as any).documentDirectory as string;
 const getInfoAsync = FileSystem.getInfoAsync as any;
 const makeDirectoryAsync = FileSystem.makeDirectoryAsync as any;
 const copyAsync = FileSystem.copyAsync as any;
 const readDirectoryAsync = FileSystem.readDirectoryAsync as any;
 const deleteAsync = FileSystem.deleteAsync as any;
-import { getDatabase } from '@/db/client';
 
 const BACKUP_DIR = `${documentDirectory}backups/`;
 const MAX_BACKUPS = 3;

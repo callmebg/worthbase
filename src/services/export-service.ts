@@ -5,8 +5,6 @@
 
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-
-const docDir = (FileSystem as any).documentDirectory as string;
 import { AccountRepository } from '@/db/account-repository';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { AssetRepository } from '@/db/asset-repository';
@@ -15,6 +13,8 @@ import { MaintenanceRepository } from '@/db/maintenance-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { getCurrentDate } from '@/utils/format';
+
+const docDir = (FileSystem as any).documentDirectory as string;
 
 export const ExportService = {
   /**
