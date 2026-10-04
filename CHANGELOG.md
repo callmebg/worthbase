@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] - 2026-10-04
+
+### Changed
+- CI 的 android-build 改用 runner 镜像自带的 Android SDK，不再自装第二份：修掉 `ANDROID_HOME` 与 `ANDROID_SDK_ROOT` 指向不同路径导致的 Gradle 构建失败（AGP “Several environment variables ... contain different paths to the SDK”），构建恢复绿色并正常产出 APK
+- GitHub Actions 升级到 node24 运行时（checkout / setup-node / setup-java / cache v4→v5、upload-artifact v4→v6），消除 “Node.js 20 is deprecated” 与 “setup-java v4 is deprecated” 告警
+- CI runner 由 `ubuntu-latest` 固定为 `ubuntu-24.04`（latest 将于 2026-10-19 迁到 Ubuntu 26），锁定构建环境、清掉迁移通知
+- release APK 产物重命名为 `WorthBase-<短commit>-<北京时间>.apk`，artifact 名与文件名一致，便于区分不同构建
+- ESLint 告警从 64 清零，`lint:ci` 棘轮 `--max-warnings` 64→0：删未用 import 与死代码、测试 `require()` 改顶层 import、`plugins/**` 关 no-console、修正 4 处 exhaustive-deps
+- `react-hooks/set-state-in-effect`、`preserve-manual-memoization` 由 warn 改 off（前者是本项目标准 RN「effect 内异步读库→setState」数据加载/表单重置写法、UI 无测试覆盖、重构风险高；后者仅表示 React Compiler 跳过优化、非正确性问题）
+
+### Removed
+- `app/index.tsx` 中算出来却从不渲染的分类占比死代码链（`catBreakdown → categoryBreakdown → totalCatValue`），及未被调用的 `downsamplePreservingExtrema` 函数
+
 ## [1.7.0] - 2026-10-04
 
 ### Added
