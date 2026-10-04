@@ -29,12 +29,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0   # 让 check-version 能看到 tag
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -67,16 +67,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: 'npm'
@@ -99,7 +99,7 @@ jobs:
         run: npm run check:version -- --strict
 
       - name: Restore Gradle cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -132,7 +132,7 @@ jobs:
 
       - name: Save Gradle cache
         if: always()
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -148,17 +148,30 @@ jobs:
           fi
           ls -la android/app/build/outputs/apk/release/
 
+      # 把 Gradle 产出的 app-release.apk 重命名为 WorthBase-<短commit>-<UTC时间>.apk，
+      # artifact 名与文件名保持一致，便于区分不同构建。
+      - name: Rename APK (WorthBase-commit-time)
+        run: |
+          set -e
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TS=$(date -u +%Y%m%d-%H%M%S)
+          BASE="WorthBase-${SHORT_SHA}-${TS}"
+          SRC=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          mv "$SRC" "android/app/build/outputs/apk/release/${BASE}.apk"
+          echo "APK_BASENAME=${BASE}" >> "$GITHUB_ENV"
+          echo "Renamed APK -> ${BASE}.apk"
+
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: android-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          name: ${{ env.APK_BASENAME }}
+          path: android/app/build/outputs/apk/release/${{ env.APK_BASENAME }}.apk
           if-no-files-found: error
 
       # 仅在失败时上传原生工程，便于排查（原来是无条件上传，噪音大）
       - name: Upload generated android project (debug only)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: android-project
           path: android
