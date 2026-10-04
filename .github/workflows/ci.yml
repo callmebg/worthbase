@@ -25,7 +25,7 @@ jobs:
   # ─── 快速门禁：不需要 Android SDK，1~2 分钟内给出结论 ───
   gates:
     name: Gates (version / typecheck / lint / test)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -61,7 +61,7 @@ jobs:
   # ─── Android 构建：用 runner 镜像自带的 Android SDK（不再自装），所以放在门禁之后，且 PR 上不跑 ───
   android-build:
     name: Android release build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: gates
     if: github.event_name != 'pull_request'
 
