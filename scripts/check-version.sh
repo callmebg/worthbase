@@ -9,11 +9,20 @@
 #   4. 版本号符合 semver
 #   5. 提示（不失败）：当前版本是否已打 git tag
 #
-# 用法:
-#   ./scripts/check-version.sh          # 校验
-#   npm run check:version               # 同上
+# 关于第 3 项：/android 被 gitignore（Expo CNG，由 expo prebuild 从 app.json 生成），
+# 所以 CI 刚 checkout 时它不存在。此时默认**跳过** gradle 校验并明确打印说明（不静默）；
+# 加 --strict 则要求它必须存在 —— 用于 prebuild 之后做真正的三处一致性校验。
 #
-# 退出码: 0 = 一致, 1 = 不一致或格式非法
+# 用法:
+#   ./scripts/check-version.sh            # 校验（gradle 不存在则跳过）
+#   ./scripts/check-version.sh --strict   # gradle 必须存在（prebuild 之后用）
+#   npm run check:version                 # 同第一条
+#   npm run check:version -- --strict     # 同第二条
+#
+# 环境变量:
+#   GRADLE_PATH   覆盖 build.gradle 路径（仅供测试注入）
+#
+# 退出码: 0 = 一致, 1 = 不一致 / 格式非法 / --strict 下 gradle 缺失
 #
 # 注意：改版本号请用 ./scripts/bump-version.sh，不要手改。
 
@@ -22,7 +31,18 @@ set -uo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG_JSON="$PROJECT_ROOT/package.json"
 APP_JSON="$PROJECT_ROOT/app.json"
-GRADLE="$PROJECT_ROOT/android/app/build.gradle"
+# /android 被 gitignore（Expo CNG：由 expo prebuild 从 app.json 生成），
+# 所以 CI 的 checkout 里没有这个文件。GRADLE_PATH 仅供测试注入。
+GRADLE="${GRADLE_PATH:-$PROJECT_ROOT/android/app/build.gradle}"
+
+# --strict：build.gradle 必须存在（用于 prebuild 之后的校验）
+STRICT=0
+for arg in "$@"; do
+  case "$arg" in
+    --strict) STRICT=1 ;;
+    -h|--help) sed -n '2,/^$/s/^# \?//p' "$0"; exit 0 ;;
+  esac
+done
 
 FAIL=0
 ok()   { printf '  ✅ %s\n' "$1"; }
@@ -46,31 +66,60 @@ echo "║   WorthBase 版本一致性校验           ║"
 echo "╚══════════════════════════════════════╝"
 echo ""
 
-for f in "$PKG_JSON" "$APP_JSON" "$GRADLE"; do
+for f in "$PKG_JSON" "$APP_JSON"; do
   if [ ! -f "$f" ]; then bad "文件不存在: $f"; fi
 done
+
+# build.gradle 可能不存在：/android 被 gitignore，由 expo prebuild 从 app.json 生成，
+# 所以 CI 刚 checkout 时没有它。非 strict 模式跳过 gradle 校验（并明说，不静默）；
+# strict 模式（prebuild 之后跑）下缺失即失败。
+HAS_GRADLE=1
+if [ ! -f "$GRADLE" ]; then
+  HAS_GRADLE=0
+  if [ "$STRICT" -eq 1 ]; then
+    bad "--strict 要求 build.gradle 存在（应在 expo prebuild 之后运行）: $GRADLE"
+  fi
+fi
 if [ "$FAIL" -ne 0 ]; then exit 1; fi
 
 V_PKG=$(read_json "$PKG_JSON" version)
 V_APP=$(read_json "$APP_JSON" expo.version)
-# POSIX BRE，不用 GNU 专有的 \+
-V_NAME=$(sed -n 's/.*versionName[[:space:]]*"\([^"]*\)".*/\1/p' "$GRADLE" | head -1)
-V_CODE=$(sed -n 's/.*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$GRADLE" | head -1)
+V_NAME=""
+V_CODE=""
+if [ "$HAS_GRADLE" -eq 1 ]; then
+  # POSIX BRE，不用 GNU 专有的 \+
+  V_NAME=$(sed -n 's/.*versionName[[:space:]]*"\([^"]*\)".*/\1/p' "$GRADLE" | head -1)
+  V_CODE=$(sed -n 's/.*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$GRADLE" | head -1)
+fi
 
 echo "  package.json          version     = ${V_PKG:-<空>}"
 echo "  app.json              expo.version= ${V_APP:-<空>}"
-echo "  build.gradle          versionName = ${V_NAME:-<空>}"
-echo "  build.gradle          versionCode = ${V_CODE:-<空>}"
+if [ "$HAS_GRADLE" -eq 1 ]; then
+  echo "  build.gradle          versionName = ${V_NAME:-<空>}"
+  echo "  build.gradle          versionCode = ${V_CODE:-<空>}"
+else
+  echo "  build.gradle          <不存在，跳过>"
+  info "/android 被 gitignore（Expo CNG，由 expo prebuild 从 app.json 生成）→ 本次只校验两处"
+  info "如需三处全验：prebuild 之后加 --strict 重跑"
+fi
 echo ""
 
-[ -n "$V_PKG" ]  && ok "package.json 有 version"  || bad "package.json 读不到 version"
-[ -n "$V_APP" ]  && ok "app.json 有 expo.version" || bad "app.json 读不到 expo.version"
-[ -n "$V_NAME" ] && ok "build.gradle 有 versionName" || bad "build.gradle 读不到 versionName"
+if [ -n "$V_PKG" ]; then ok "package.json 有 version"; else bad "package.json 读不到 version"; fi
+if [ -n "$V_APP" ]; then ok "app.json 有 expo.version"; else bad "app.json 读不到 expo.version"; fi
 
-if [ "$V_PKG" = "$V_APP" ] && [ "$V_PKG" = "$V_NAME" ]; then
-  ok "三处版本号一致: $V_PKG"
+if [ "$HAS_GRADLE" -eq 1 ]; then
+  if [ -n "$V_NAME" ]; then ok "build.gradle 有 versionName"; else bad "build.gradle 读不到 versionName"; fi
+  if [ "$V_PKG" = "$V_APP" ] && [ "$V_PKG" = "$V_NAME" ]; then
+    ok "三处版本号一致: $V_PKG"
+  else
+    bad "三处版本号不一致（package=$V_PKG app=$V_APP gradle=$V_NAME）—— 请用 ./scripts/bump-version.sh 统一"
+  fi
 else
-  bad "三处版本号不一致（package=$V_PKG app=$V_APP gradle=$V_NAME）—— 请用 ./scripts/bump-version.sh 统一"
+  if [ "$V_PKG" = "$V_APP" ]; then
+    ok "两处版本号一致: $V_PKG（build.gradle 未生成，已跳过）"
+  else
+    bad "版本号不一致（package=$V_PKG app=$V_APP）—— 请用 ./scripts/bump-version.sh 统一"
+  fi
 fi
 
 if echo "$V_PKG" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
@@ -79,10 +128,12 @@ else
   bad "版本号不符合 semver(x.y.z): '$V_PKG'"
 fi
 
-if echo "$V_CODE" | grep -qE '^[1-9][0-9]*$'; then
-  ok "versionCode 是正整数: $V_CODE"
-else
-  bad "versionCode 必须是正整数: '$V_CODE'"
+if [ "$HAS_GRADLE" -eq 1 ]; then
+  if echo "$V_CODE" | grep -qE '^[1-9][0-9]*$'; then
+    ok "versionCode 是正整数: $V_CODE"
+  else
+    bad "versionCode 必须是正整数: '$V_CODE'"
+  fi
 fi
 
 # tag 检查只提示，不失败（tag 通常在发版时才打）

@@ -12,6 +12,18 @@ Always use the bump script — do NOT manually edit version numbers:
 
 Updates 3 files: `package.json`, `app.json`, `android/app/build.gradle`.
 
+Note: `/android` is **gitignored** (Expo CNG — `npx expo prebuild` regenerates it from
+`app.json`), so the `build.gradle` change is local-only and never committed. CI produces
+the native project itself, then re-checks all three with `npm run check:version -- --strict`.
+
+Verify after bumping:
+
+```bash
+npm run check:version    # package.json / app.json / build.gradle must agree
+```
+
+Also update `CHANGELOG.md` (Keep a Changelog format, entries in Chinese).
+
 ## Architecture
 
 - React Native / Expo (SDK 55) with SQLite database

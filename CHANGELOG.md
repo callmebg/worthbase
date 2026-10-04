@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-10-04
+
+### Added
+- 经常性支出支持周期：月付 / 季付 / 年付（新增 `frequency` 字段，migration v10，默认月付）；月度持有成本按 ÷1 / ÷3 / ÷12 折算，累计成本按月折算
+- 支出表单增加周期选择 Chip，列表金额后缀显示 /月 /季 /年
+- 贵金属实时参考价：资产详情页新增「实时参考价」区块，显示国际现货折算的金 / 银价（元/克）、按克重的参考市值，并标注所用汇率与更新时间
+- 估值弹窗支持「按金价填入 / 按银价填入」（价格 × 克数，可手改后保存）
+- 贵金属未填克数时给出可点击提示直达编辑态；取价失败时显示空态 + 重试按钮（不再整块静默消失）
+- 项目测试计划 `docs/test-plan.md`：现状盘点、11 项覆盖缺口、分层策略、8 大模块用例矩阵、9 条发布门禁
+- 设备端 E2E harness `scripts/adb-ui-test.sh`：doctor / backup-db / restore-db / verify-data / metal / log 等子命令；恢复演练已实测数据零丢失
+- 版本一致性校验 `scripts/check-version.sh`（支持 `--strict`），已挂到 CI
+- npm scripts：`typecheck` / `lint` / `lint:ci` / `test:coverage` / `check:version` / `verify`
+
+### Changed
+- 汇率数据源改为国内优先的四级回落链：腾讯 `qt.gtimg.cn` → 新浪 `hq.sinajs.cn` → `open.er-api.com` → `frankfurter.dev`；金银价与汇率解耦并行获取、各自独立缓存，汇率源全挂时回落汇率缓存
+- 新增汇率合理性校验（3~15），拒绝解析错位产生的离谱数值污染估值
+- 取价失败不再静默：全部 `console.warn`，UI 给出可见错误态
+- CI 改为 push / pull_request 触发，拆分为 `gates`（版本 + tsc + lint + test）与 `android-build` 两个 job
+- 引入 ESLint（eslint-config-expo flat config）作为门禁：0 error，warning 设 64 上限棘轮（只减不增）
+- `BottomSheet` 移除失效的 `enableKeyboardHandling` 属性（@gorhom/bottom-sheet v5 无此 prop，且全仓无调用方）
+- 断开 `useToast ↔ Toast` 循环依赖：抽出 `src/hooks/toast-context.ts`，既有引用路径全部保持可用
+- 测试从 237 增至 249
+
+### Fixed
+- **贵金属实时参考价在国内网络下完全不可见**：汇率源 `frankfurter.dev` 被 DNS 污染，而金银价与汇率是 all-or-nothing，加上 `catch {}` 静默吞错，导致整块消失且无任何日志
+- `app/index.tsx` 从 `HoldingCostResult` 上取并不存在的 `currentValuation`（导致分类占比结果恒为空；该值属死代码，无用户可见影响）
+- `IconPickerSheet` 误用 `useMemo` 执行 setState（渲染期更新，有死循环风险）→ 改为 `useEffect`
+- 冷启动时的 LogBox require cycle 告警：其横幅与底部导航可点区重叠，会吃掉点击
+- **CI 从未成功运行过**：`react-test-renderer@19.2.7` 与 `react-dom@19.3.0` 的 peer 依赖和 Expo SDK 55 钉的 `react@19.2.0` 冲突，`npm ci` 必然失败；三者已统一为 19.2.0
+- CI 的 Gradle 构建失败被 `|| exit 0` 吞掉、永远显示绿色；`gradlew` 缺失也不再静默跳过
+- `scripts/bump-version.sh` 在 Git Bash 下崩溃：MSYS 路径 `/g/...` 被 node 解析成 `G:\g\...`（ENOENT）→ 改为 `cygpath` 转换 + argv 传参
+- 旧备份导入兼容：`frequency` 缺失或非法时回落 monthly
+- ICON_REGISTRY 补 `BarChart3 → ChartBar` 别名（lucide 更名导致 4 个测试崩溃）
+
 ## [1.6.0] - 2026-08-23
 
 ### Added

@@ -31,6 +31,14 @@ NC='\033[0m'
 # ── 项目根目录（脚本在 scripts/ 下，所以上一级） ──
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# node / adb 等 Windows 原生程序不认识 MSYS 路径：
+# 传 /g/code/worthbase 会被解析成「当前盘 + \g\code\worthbase」（如 G:\g\code\...）而 ENOENT。
+# 因此在把路径交给这类程序前统一转成 Windows 形式；
+# Linux/macOS（CI）上没有 cygpath，原样返回即可。
+winpath() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
+}
+
 # ── 参数解析 ──
 DRY_RUN=false
 VERSION=""
@@ -131,13 +139,14 @@ UPDATED=0
 # 1. package.json
 if command -v node &>/dev/null && command -v npx &>/dev/null; then
   # 用 node 精确替换，避免 jq 依赖
-  node -e "
-    const fs = require('fs');
-    const f = '$PACKAGE_JSON';
-    const pkg = JSON.parse(fs.readFileSync(f, 'utf8'));
-    pkg.version = '$VERSION';
-    fs.writeFileSync(f, JSON.stringify(pkg, null, 2) + '\n');
-  "
+  # 路径与版本号都走 argv：既避开 MSYS 路径问题，也免掉内插的引号/转义陷阱
+  node -e '
+    const fs = require("fs");
+    const f = process.argv[1];
+    const pkg = JSON.parse(fs.readFileSync(f, "utf8"));
+    pkg.version = process.argv[2];
+    fs.writeFileSync(f, JSON.stringify(pkg, null, 2) + "\n");
+  ' "$(winpath "$PACKAGE_JSON")" "$VERSION"
   echo -e "  ${GREEN}✓${NC} package.json"
   UPDATED=$((UPDATED + 1))
 else
@@ -149,13 +158,13 @@ fi
 
 # 2. app.json
 if command -v node &>/dev/null; then
-  node -e "
-    const fs = require('fs');
-    const f = '$APP_JSON';
-    const app = JSON.parse(fs.readFileSync(f, 'utf8'));
-    app.expo.version = '$VERSION';
-    fs.writeFileSync(f, JSON.stringify(app, null, 2) + '\n');
-  "
+  node -e '
+    const fs = require("fs");
+    const f = process.argv[1];
+    const app = JSON.parse(fs.readFileSync(f, "utf8"));
+    app.expo.version = process.argv[2];
+    fs.writeFileSync(f, JSON.stringify(app, null, 2) + "\n");
+  ' "$(winpath "$APP_JSON")" "$VERSION"
   echo -e "  ${GREEN}✓${NC} app.json"
   UPDATED=$((UPDATED + 1))
 else

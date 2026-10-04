@@ -136,6 +136,12 @@ jobs:
       - name: Prebuild Android (generate native project)
         run: npx expo prebuild --platform android --non-interactive
 
+      # /android 被 gitignore，只有 prebuild 之后才存在 build.gradle。
+      # gates job 里的那次校验只比对了 package.json 与 app.json（两处），
+      # 这里加 --strict 做真正的三处一致性校验。
+      - name: Check version consistency (incl. generated build.gradle)
+        run: npm run check:version -- --strict
+
       - name: Restore Gradle cache
         uses: actions/cache@v4
         with:
