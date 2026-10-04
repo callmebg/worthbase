@@ -89,6 +89,10 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
 
   // Live metal reference prices (贵金属实时参考价)
   const [metalPrices, setMetalPrices] = useState<MetalPrices | null>(null);
+  // 联网取价失败（区分「不适用」和「拉取失败」，避免整块静默消失）
+  const [metalLoadFailed, setMetalLoadFailed] = useState(false);
+  // 重试计数：递增即可重新触发取价 effect
+  const [metalRetryTick, setMetalRetryTick] = useState(0);
 
   // Maintenance record add state
   const [showAddMaintenance, setShowAddMaintenance] = useState(false);
@@ -132,27 +136,40 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // 贵金属资产：先展示缓存价格，再后台刷新（离线时保持缓存，静默降级）
+  // 贵金属 + 已填克数才取价；失败不再静默（metalLoadFailed 驱动空态提示）
+  const wantsMetalPrice =
+    asset?.category === AssetCategory.PRECIOUS_METAL && !!asset?.weightGrams;
+
+  // 贵金属资产：先展示缓存价格，再后台刷新（离线时保持缓存）
   useEffect(() => {
-    if (asset?.category !== AssetCategory.PRECIOUS_METAL || !asset?.weightGrams) {
+    if (!wantsMetalPrice) {
       setMetalPrices(null);
+      setMetalLoadFailed(false);
       return;
     }
     let cancelled = false;
+    setMetalLoadFailed(false);
     (async () => {
       const cached = await MetalPriceService.getCached();
       if (!cancelled && cached) setMetalPrices(cached);
       const prices = await MetalPriceService.getPrices();
-      if (!cancelled) setMetalPrices(prices);
+      if (cancelled) return;
+      if (prices) {
+        setMetalPrices(prices);
+      } else {
+        // 新价取不到且无缓存可回落 → 显示失败态（不清空已展示的价格）
+        setMetalLoadFailed(true);
+      }
     })();
     return () => { cancelled = true; };
-  }, [asset?.id, asset?.category, asset?.weightGrams]);
+  }, [wantsMetalPrice, asset?.id, metalRetryTick]);
 
   if (!asset) return null;
 
   const isActive = asset.status === AssetStatus.ACTIVE;
   const isSold = asset.status === AssetStatus.SOLD;
   const isRetired = asset.status === AssetStatus.RETIRED;
+  const isMetalAsset = asset.category === AssetCategory.PRECIOUS_METAL;
   const iconName = resolveAssetIcon(asset.icon, asset.category);
 
   const handleRetire = async () => {
@@ -389,7 +406,21 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
         </View>
 
         {/* Live Metal Price Reference (贵金属实时参考价) */}
-        {metalPrices && asset.weightGrams ? (
+        {isMetalAsset && !asset.weightGrams ? (
+          // 贵金属但没填克数：给出口，而不是整块消失
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>实时参考价</Text>
+            <TouchableOpacity
+              onPress={() => setShowEdit(true)}
+              style={[styles.infoCard, styles.hintCard, { backgroundColor: theme.colors.surfaceVariant }]}
+            >
+              <Text style={[styles.emptySubtext, { color: theme.colors.onSurfaceVariant, flex: 1 }]}>
+                填写克数后，可按实时金银价估算市值
+              </Text>
+              <Icon name="ChevronRight" size={16} color="onSurfaceVariant" />
+            </TouchableOpacity>
+          </View>
+        ) : metalPrices && asset.weightGrams ? (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>实时参考价</Text>
             <View style={[styles.infoCard, { backgroundColor: theme.colors.surfaceVariant }]}>
@@ -409,6 +440,29 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
                 {metalPrices.stale ? '缓存于' : '更新于'} {formatTimeHM(metalPrices.fetchedAt)}
                 {metalPrices.stale ? '（当前无法联网）' : ''} · 国际现货折算，仅供估价参考
               </Text>
+              {metalPrices.usdToCny ? (
+                <Text style={[styles.metalNote, { color: theme.colors.tertiary }]}>
+                  汇率 {metalPrices.usdToCny.toFixed(4)}
+                  {metalPrices.fxStale ? '（缓存值，联网获取汇率失败）' : ''}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        ) : metalLoadFailed && asset.weightGrams ? (
+          // 联网失败且无缓存：明确告知 + 重试，不再静默
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.onSurface }]}>实时参考价</Text>
+            <View style={[styles.infoCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+              <Text style={[styles.emptySubtext, { color: theme.colors.onSurfaceVariant }]}>
+                暂时无法获取实时价格，请检查网络后重试
+              </Text>
+              <AppButton
+                title="重试"
+                variant="secondary"
+                compact
+                onPress={() => setMetalRetryTick(t => t + 1)}
+                style={{ alignSelf: 'flex-start', marginTop: 8 }}
+              />
             </View>
           </View>
         ) : null}
@@ -838,6 +892,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   infoCard: { borderRadius: radius.md, padding: 16 },
+  hintCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   infoLabel: { fontSize: 14 },
   infoValue: { fontSize: 14, fontWeight: '500' },
