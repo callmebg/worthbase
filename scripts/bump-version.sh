@@ -4,8 +4,8 @@
 #
 # 更新以下 3 处：
 #   1. package.json        → version
-#   2. app.json            → expo.version
-#   3. android/app/build.gradle → versionCode + versionName
+#   2. app.json            → expo.version + expo.android.versionCode
+#   3. android/app/build.gradle → versionCode + versionName（gitignore，仅本地直连 gradle 构建用）
 #
 # 注意：app/settings.tsx 已通过 expo-constants 动态读取版本，无需手动更新
 #
@@ -95,7 +95,12 @@ done
 
 # ── 读取当前版本 ──
 OLD_VERSION=$(grep -oP '"version":\s*"\K[^"]+' "$PACKAGE_JSON" | head -1)
-OLD_VERSION_CODE=$(grep -oP 'versionCode\s+\K[0-9]+' "$BUILD_GRADLE")
+# versionCode 的「真源」是 app.json（已入库；CI 的 expo prebuild 由它生成 build.gradle）。
+# 优先从 app.json 读，缺失时回落到本地 build.gradle（兼容尚未迁移的旧状态）。
+OLD_VERSION_CODE=$(node -e 'const fs=require("fs");try{const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const v=a.expo&&a.expo.android&&a.expo.android.versionCode;process.stdout.write(v==null?"":String(v))}catch(e){}' "$(winpath "$APP_JSON")" 2>/dev/null || true)
+if [[ -z "$OLD_VERSION_CODE" && -f "$BUILD_GRADLE" ]]; then
+  OLD_VERSION_CODE=$(grep -oP 'versionCode\s+\K[0-9]+' "$BUILD_GRADLE" || true)
+fi
 OLD_VERSION_NAME=$(grep -oP 'versionName\s+"\K[^"]+' "$BUILD_GRADLE")
 
 # ── 计算 versionCode ──
@@ -123,7 +128,7 @@ echo -e "  versionName: ${YELLOW}$OLD_VERSION_NAME${NC} → ${GREEN}$VERSION${NC
 echo ""
 echo -e "${BOLD}将更新以下文件:${NC}"
 echo -e "  1. ${CYAN}package.json${NC}              → version: \"$VERSION\""
-echo -e "  2. ${CYAN}app.json${NC}                  → expo.version: \"$VERSION\""
+echo -e "  2. ${CYAN}app.json${NC}                  → expo.version: \"$VERSION\", android.versionCode: $VERSION_CODE"
 echo -e "  3. ${CYAN}android/app/build.gradle${NC}  → versionCode: $VERSION_CODE, versionName: \"$VERSION\""
 echo -e "  ${CYAN}(settings.tsx 已通过 expo-constants 自动读取)${NC}"
 echo ""
@@ -163,8 +168,10 @@ if command -v node &>/dev/null; then
     const f = process.argv[1];
     const app = JSON.parse(fs.readFileSync(f, "utf8"));
     app.expo.version = process.argv[2];
+    app.expo.android = app.expo.android || {};
+    app.expo.android.versionCode = Number(process.argv[3]);
     fs.writeFileSync(f, JSON.stringify(app, null, 2) + "\n");
-  ' "$(winpath "$APP_JSON")" "$VERSION"
+  ' "$(winpath "$APP_JSON")" "$VERSION" "$VERSION_CODE"
   echo -e "  ${GREEN}✓${NC} app.json"
   UPDATED=$((UPDATED + 1))
 else

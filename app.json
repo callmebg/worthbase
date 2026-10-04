@@ -19,6 +19,7 @@
     },
     "android": {
       "package": "com.worthbase.app",
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#6C5CE7",
         "foregroundImage": "./assets/android-icon-foreground.png",

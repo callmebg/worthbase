@@ -84,6 +84,7 @@ if [ "$FAIL" -ne 0 ]; then exit 1; fi
 
 V_PKG=$(read_json "$PKG_JSON" version)
 V_APP=$(read_json "$APP_JSON" expo.version)
+V_CODE_APP=$(read_json "$APP_JSON" expo.android.versionCode)
 V_NAME=""
 V_CODE=""
 if [ "$HAS_GRADLE" -eq 1 ]; then
@@ -106,6 +107,13 @@ echo ""
 
 if [ -n "$V_PKG" ]; then ok "package.json 有 version"; else bad "package.json 读不到 version"; fi
 if [ -n "$V_APP" ]; then ok "app.json 有 expo.version"; else bad "app.json 读不到 expo.version"; fi
+# app.json 必须带 android.versionCode：CI 的 expo prebuild 从 app.json 生成 build.gradle，
+# 缺了它会退回默认 versionCode 1，导致新 APK 无法覆盖安装（报「无法降级安装」）。
+if [ -n "$V_CODE_APP" ]; then
+  ok "app.json 有 android.versionCode: $V_CODE_APP"
+else
+  bad "app.json 缺 expo.android.versionCode —— CI prebuild 会退回 versionCode 1，APK 覆盖安装会报「无法降级安装」。请用 ./scripts/bump-version.sh 补上"
+fi
 
 if [ "$HAS_GRADLE" -eq 1 ]; then
   if [ -n "$V_NAME" ]; then ok "build.gradle 有 versionName"; else bad "build.gradle 读不到 versionName"; fi
@@ -130,9 +138,13 @@ fi
 
 if [ "$HAS_GRADLE" -eq 1 ]; then
   if echo "$V_CODE" | grep -qE '^[1-9][0-9]*$'; then
-    ok "versionCode 是正整数: $V_CODE"
+    ok "build.gradle versionCode 是正整数: $V_CODE"
   else
-    bad "versionCode 必须是正整数: '$V_CODE'"
+    bad "build.gradle versionCode 必须是正整数: '$V_CODE'"
+  fi
+  # app.json 与 build.gradle 的 versionCode 必须一致（CI 里 build.gradle 由 app.json 生成，本就该相等）
+  if [ -n "$V_CODE_APP" ] && [ "$V_CODE" != "$V_CODE_APP" ]; then
+    bad "versionCode 不一致（app.json=$V_CODE_APP, build.gradle=$V_CODE）—— 请用 ./scripts/bump-version.sh 统一"
   fi
 fi
 
