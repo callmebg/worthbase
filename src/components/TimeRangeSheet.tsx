@@ -239,8 +239,11 @@ export const TimeRangeSheet: React.FC<Props> = ({
   // Reset picker state when sheet opens
   useEffect(() => {
     if (!visible) return;
-    const endY = now.getFullYear();
-    const endM = now.getMonth() + 1;
+    // 在 effect 内本地取当前时间，避免依赖 render 期的 now（每帧都是新 Date，
+    // 放进依赖数组会让 effect 每帧重跑并 setState → 死循环）
+    const current = new Date();
+    const endY = current.getFullYear();
+    const endM = current.getMonth() + 1;
     let startY = endY;
     let startM = endM;
 

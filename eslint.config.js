@@ -24,15 +24,16 @@ module.exports = defineConfig([
       // 不强制文件名风格
       'no-console': ['warn', { allow: ['warn', 'error'] }],
 
-      // ── 降级为 warn 的 React Compiler 系规则（登记为技术债 T13，见 docs/test-plan.md）──
+      // ── React Compiler 系规则：2026-10-04 复核后决定关闭（原为 warn / 技术债 T13）──
       // set-state-in-effect：本项目所有屏幕/弹窗都用「effect 内异步读 SQLite → setState」
-      // 这一标准 RN 模式加载数据（实测 12 处）。该规则要求改成 render 期派生或 Suspense，
-      // 属跨 8 个文件的架构重构，不应塞进「让 lint 能当门禁」这一步里。
-      // 降为 warn 保留可见性，而不是 off 装作不存在。
-      'react-hooks/set-state-in-effect': 'warn',
-      // preserve-manual-memoization：仅表示 React Compiler 跳过了该处优化（3 处，
-      // 均在 TimeRangeSheet），不是正确性问题，不影响运行时行为。
-      'react-hooks/preserve-manual-memoization': 'warn',
+      // 这一标准 RN 模式加载数据 + 表单随 props 重置。规则要求改成 render 期派生或 Suspense，
+      // 属跨 8 文件的架构重构；且这些 UI 行为无测试覆盖（仅「渲染不崩」冒烟测试），
+      // 强行重构回归风险高、收益低。评估后接受该写法，关闭此规则。
+      'react-hooks/set-state-in-effect': 'off',
+      // preserve-manual-memoization：仅表示 React Compiler 跳过了该处优化（TimeRangeSheet 3 处），
+      // 不是正确性问题、不影响运行时行为；本项目未采用 React Compiler，故关闭。
+      'react-hooks/preserve-manual-memoization': 'off',
+      // 注：exhaustive-deps 保持启用（能抓 stale-closure 真 bug），原有 4 处已逐一修正。
     },
   },
   {

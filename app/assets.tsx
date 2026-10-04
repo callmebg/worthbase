@@ -55,7 +55,7 @@ export default function AssetsScreen() {
   const [usageMap, setUsageMap] = useState<Map<string, UsageResult>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
 
-  useFocusEffect(useCallback(() => { loadAssets(); }, []));
+  useFocusEffect(useCallback(() => { loadAssets(); }, [loadAssets]));
 
   useEffect(() => {
     (async () => {

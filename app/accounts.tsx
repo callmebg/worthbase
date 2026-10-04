@@ -54,7 +54,7 @@ export default function AccountsScreen() {
   useEffect(() => {
     loadAccounts();
     BalanceSnapshotRepository.getPreviousBalances().then(setPreviousBalances);
-  }, []);
+  }, [loadAccounts]);
 
   const onRefresh = () => {
     setRefreshing(true);

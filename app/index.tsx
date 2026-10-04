@@ -252,7 +252,7 @@ export default function DashboardScreen() {
   useFocusEffect(useCallback(() => {
     loadAccounts();
     loadAssets();
-  }, []));
+  }, [loadAccounts, loadAssets]));
 
   useEffect(() => {
     loadData();
