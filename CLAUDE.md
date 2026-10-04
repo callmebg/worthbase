@@ -35,14 +35,25 @@ Updates 3 files: `package.json`, `app.json`, `android/app/build.gradle`.
 
 ## Database Migrations
 
-- Current version: v9 (see `src/db/migrations.ts`)
+- Current version: v10 (see `src/db/migrations.ts`)
 - Migrations must be idempotent
 - Bump `CURRENT_VERSION` constant when adding new migration
+- No migration tests yet — see `docs/test-plan.md` (gap G5 / task T9)
 
-## Known Pre-existing TS Errors (ignore these)
+## Type Checking
 
-- `BottomSheet.tsx` — `BottomSheetDefaultBackdropProps` and `enableKeyboardHandling` type issues
-- `app/index.tsx` — `currentValuation` not on `HoldingCostResult`
+`npx tsc --noEmit` must be **clean (exit 0)**. There is no "ignore these errors" list any more:
+the two long-standing errors (`BottomSheet.tsx` backdrop/keyboard props, `app/index.tsx`
+`currentValuation`) were fixed and CI now gates on typecheck. Do not add `@ts-ignore`
+or re-introduce a tolerated-error list — fix the type instead.
+
+## Testing
+
+- `npm test` — 249 unit/integration tests (jest + ts-jest, sql.js for real-SQLite repository tests)
+- `./scripts/adb-ui-test.sh` — on-device E2E harness (see `docs/test-plan.md` §4)
+- Network features must be verified on a real device inside the mainland-China network:
+  a `curl` that works from the dev machine does not prove the phone can reach the host
+  (DNS poisoning / Cloudflare flakiness). See `docs/test-plan.md` §7 rule 8.
 
 ## Language
 

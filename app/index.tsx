@@ -16,7 +16,7 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/utils/format';
+import { useAppTheme, formatCurrency, formatCompactCurrency } from '@/utils/format';
 import { useFocusEffect, useRouter, useNavigation } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -36,7 +36,6 @@ import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
 import { spacing, radius } from '@/theme/tokens';
 import type { NetWorthResult, ValuationHistory, UsageResult } from '@/types/models';
-import { formatCurrency, formatCompactCurrency } from '@/utils/format';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
 import { Icon } from '@/components/ui/Icon';
@@ -132,10 +131,13 @@ export default function DashboardScreen() {
     setUsageMap(usageResults);
 
     // Category breakdown for visualization
+    // 口径必须与资产页 totalValuation 一致（assets.tsx: currentValuation ?? purchasePrice），
+    // 否则分类占比加总对不上「资产总值」。
+    // 注意：原先误从 HoldingCostResult 取 currentValuation —— 该类型没有此字段，
+    // 恒为 undefined → val 恒为 0 → 全部被 filter(value > 0) 剔除，此结果始终为空。
     const catMap = new Map<string, number>();
     for (const asset of activeAssets) {
-      const result = allResults.get(asset.id);
-      const val = result?.currentValuation ?? 0;
+      const val = asset.currentValuation ?? asset.purchasePrice;
       catMap.set(asset.category, (catMap.get(asset.category) ?? 0) + val);
     }
     const catBreakdown = Array.from(catMap.entries())

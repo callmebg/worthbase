@@ -10,7 +10,7 @@ import BottomSheetBase, {
   BottomSheetScrollView,
   BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
-import type { BottomSheetDefaultBackdropProps } from '@gorhom/bottom-sheet';
+import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { useTheme } from 'react-native-paper';
 import { radius } from '@/theme/tokens';
 
@@ -32,8 +32,6 @@ interface AppBottomSheetProps {
   dismissOnBackdrop?: boolean;
   /** Title text (optional) */
   title?: string;
-  /** Enable keyboard handling (default: true) */
-  enableKeyboardHandling?: boolean;
 }
 
 export const AppBottomSheet = forwardRef<AppBottomSheetRef, AppBottomSheetProps>(
@@ -45,7 +43,6 @@ export const AppBottomSheet = forwardRef<AppBottomSheetRef, AppBottomSheetProps>
       children,
       dismissOnBackdrop = true,
       title,
-      enableKeyboardHandling = true,
     },
     ref,
   ) {
@@ -66,8 +63,10 @@ export const AppBottomSheet = forwardRef<AppBottomSheetRef, AppBottomSheetProps>
       [onClose],
     );
 
+    // v5 的 backdropComponent 收到的是 BottomSheetBackdropProps（BottomSheetDefaultBackdropProps
+    // 是它的超集，且未从包根导出）。多出来的 disappearsOnIndex / pressBehavior 均为可选，可直接展开。
     const renderBackdrop = useCallback(
-      (props: BottomSheetDefaultBackdropProps) => (
+      (props: BottomSheetBackdropProps) => (
         <BottomSheetBackdrop
           {...props}
           disappearsOnIndex={-1}
@@ -89,7 +88,8 @@ export const AppBottomSheet = forwardRef<AppBottomSheetRef, AppBottomSheetProps>
         onChange={handleSheetChanges}
         backdropComponent={renderBackdrop}
         enablePanDownToClose
-        enableKeyboardHandling={enableKeyboardHandling}
+        // @gorhom/bottom-sheet v5 没有 enableKeyboardHandling 这个 prop（v4 遗留），
+        // 键盘行为统一由下面的 keyboardBehavior 控制。
         keyboardBehavior="interactive"
         style={styles.sheet}
         backgroundStyle={{

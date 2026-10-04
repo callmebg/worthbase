@@ -578,7 +578,10 @@ import { AppTextInput } from '@/components/ui';
 | `children` | `ReactNode` | 必填 | 内容 |
 | `dismissOnBackdrop` | `boolean` | `true` | 点击背景关闭 |
 | `title` | `string` | — | 标题文字 |
-| `enableKeyboardHandling` | `boolean` | `true` | 键盘处理 |
+
+> 键盘行为由内部固定的 `keyboardBehavior="interactive"` 控制。
+> 旧文档里的 `enableKeyboardHandling` 已移除 —— `@gorhom/bottom-sheet` v5 没有这个 prop（v4 遗留），
+> 传进去只会被忽略，属于失效的 API 表面。
 
 #### Ref 方法
 
