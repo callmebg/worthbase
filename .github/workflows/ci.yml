@@ -148,13 +148,13 @@ jobs:
           fi
           ls -la android/app/build/outputs/apk/release/
 
-      # 把 Gradle 产出的 app-release.apk 重命名为 WorthBase-<短commit>-<UTC时间>.apk，
+      # 把 Gradle 产出的 app-release.apk 重命名为 WorthBase-<短commit>-<北京时间>.apk，
       # artifact 名与文件名保持一致，便于区分不同构建。
       - name: Rename APK (WorthBase-commit-time)
         run: |
           set -e
           SHORT_SHA=$(git rev-parse --short HEAD)
-          TS=$(date -u +%Y%m%d-%H%M%S)
+          TS=$(TZ='Asia/Shanghai' date +%Y%m%d-%H%M%S)
           BASE="WorthBase-${SHORT_SHA}-${TS}"
           SRC=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
           mv "$SRC" "android/app/build/outputs/apk/release/${BASE}.apk"
