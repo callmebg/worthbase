@@ -55,4 +55,11 @@ module.exports = defineConfig([
       'import/first': 'off',
     },
   },
+  {
+    // Expo 配置插件是构建期运行的 Node 脚本，console.log 是正常的构建输出（与已 ignore 的 scripts/ 同理）
+    files: ['plugins/**/*.js'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
 ]);

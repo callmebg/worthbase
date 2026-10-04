@@ -54,8 +54,6 @@ export default function SettingsScreen() {
   const theme = useAppTheme();
   const toast = useToast();
   const settings = useSettingsStore();
-  const { accounts, balances } = useAccountStore();
-  const { assets } = useAssetStore();
 
   const [pinInput, setPinInput] = useState('');
   const [showPinSetup, setShowPinSetup] = useState(false);

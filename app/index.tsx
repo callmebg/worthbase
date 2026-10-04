@@ -10,7 +10,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Dimensions,
   RefreshControl,
   TouchableOpacity,
   Modal,
@@ -32,7 +31,7 @@ import { HoldingCostCalculator } from '@/engine/HoldingCostCalculator';
 import { UsageCalculator } from '@/engine/UsageCalculator';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
-import { AssetStatus, AssetCategoryLabels } from '@/types/enums';
+import { AssetStatus } from '@/types/enums';
 import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
 import { spacing, radius } from '@/theme/tokens';
 import type { NetWorthResult, ValuationHistory, UsageResult } from '@/types/models';
@@ -48,8 +47,6 @@ import { NetWorthExplainer } from '@/components/NetWorthExplainer';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { AppButton } from '@/components/ui/Button';
-
-const screenWidth = Dimensions.get('window').width;
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -70,7 +67,7 @@ export default function DashboardScreen() {
       ),
     });
   }, [navigation, router, theme.colors.onSurface]);
-  const { accounts, balances, loadAccounts } = useAccountStore();
+  const { accounts, loadAccounts } = useAccountStore();
   const { assets, loadAssets } = useAssetStore();
   const { netWorthGoal, currencySymbol, update } = useSettingsStore();
   const toast = useToast();
@@ -78,7 +75,6 @@ export default function DashboardScreen() {
   const [netWorth, setNetWorth] = useState<NetWorthResult | null>(null);
   const [totalMonthlyCost, setTotalMonthlyCost] = useState(0);
   const [costBreakdown, setCostBreakdown] = useState<{ name: string; cost: number; category: string }[]>([]);
-  const [categoryBreakdown, setCategoryBreakdown] = useState<{ category: string; label: string; value: number }[]>([]);
   const [trendData, setTrendData] = useState<{ labels: string[]; fullDates: string[]; datasets: { data: number[] }[] }>({ labels: [], fullDates: [], datasets: [{ data: [] }] });
   const [allTrendData, setAllTrendData] = useState<{ labels: string[]; fullDates: string[]; datasets: { data: number[] }[] }>({ labels: [], fullDates: [], datasets: [{ data: [] }] });
   const [timeRange, setTimeRange] = useState<TimeRangeState>('6m');
@@ -129,26 +125,6 @@ export default function DashboardScreen() {
     // Usage data for cost-per-use dashboard insights
     const usageResults = await UsageCalculator.calculateAll(activeAssets);
     setUsageMap(usageResults);
-
-    // Category breakdown for visualization
-    // 口径必须与资产页 totalValuation 一致（assets.tsx: currentValuation ?? purchasePrice），
-    // 否则分类占比加总对不上「资产总值」。
-    // 注意：原先误从 HoldingCostResult 取 currentValuation —— 该类型没有此字段，
-    // 恒为 undefined → val 恒为 0 → 全部被 filter(value > 0) 剔除，此结果始终为空。
-    const catMap = new Map<string, number>();
-    for (const asset of activeAssets) {
-      const val = asset.currentValuation ?? asset.purchasePrice;
-      catMap.set(asset.category, (catMap.get(asset.category) ?? 0) + val);
-    }
-    const catBreakdown = Array.from(catMap.entries())
-      .map(([category, value]) => ({
-        category,
-        label: AssetCategoryLabels[category as keyof typeof AssetCategoryLabels] || category,
-        value,
-      }))
-      .filter(c => c.value > 0)
-      .sort((a, b) => b.value - a.value);
-    setCategoryBreakdown(catBreakdown);
 
     // ── Trend data: same formula as hero card ──────────────────────────────────
     // net worth = account balances + asset valuations
@@ -296,7 +272,6 @@ export default function DashboardScreen() {
 
   const progress = netWorthGoal ? Math.min(100, (netWorth?.netWorth ?? 0) / netWorthGoal * 100) : 0;
   const progressWidth = Math.max(0, progress);
-  const totalCatValue = categoryBreakdown.reduce((s, c) => s + c.value, 0);
 
   const timeRangeLabels: Record<TimeRangePreset, string> = {
     '3m': '3月',
@@ -716,45 +691,6 @@ export default function DashboardScreen() {
     </AppBottomSheet>
     </>
   );
-}
-
-/**
- * Downsample time-series data while preserving peaks and valleys.
- * Uses a bucket-based approach: for each bucket, keep the most extreme point
- * (alternating min/max based on distance from neighbor average).
- * Always preserves the first and last points.
- */
-function downsamplePreservingExtrema(
-  points: { date: string; value: number }[],
-  maxPoints: number
-): { date: string; value: number }[] {
-  if (points.length <= maxPoints) return points;
-  const result: { date: string; value: number }[] = [points[0]];
-  const bucketCount = maxPoints - 2; // interior buckets (first and last are always kept)
-  const interiorPoints = points.slice(1, -1);
-  const bucketSize = interiorPoints.length / bucketCount;
-
-  for (let b = 0; b < bucketCount; b++) {
-    const start = Math.floor(b * bucketSize);
-    const end = Math.min(Math.floor((b + 1) * bucketSize), interiorPoints.length);
-    const bucket = interiorPoints.slice(start, end);
-    if (bucket.length === 0) continue;
-
-    // Find the point with max absolute deviation from the line between
-    // the previous kept point and the last data point
-    const prevVal = result[result.length - 1].value;
-    const lastVal = points[points.length - 1].value;
-    const avg = (prevVal + lastVal) / 2;
-    let bestIdx = 0;
-    let bestDist = -1;
-    for (let j = 0; j < bucket.length; j++) {
-      const dist = Math.abs(bucket[j].value - avg);
-      if (dist > bestDist) { bestDist = dist; bestIdx = j; }
-    }
-    result.push(bucket[bestIdx]);
-  }
-  result.push(points[points.length - 1]);
-  return result;
 }
 
 const styles = StyleSheet.create({

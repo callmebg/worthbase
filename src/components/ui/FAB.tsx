@@ -4,10 +4,10 @@
  */
 
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
+import { StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { Icon } from './Icon';
-import { radius, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 
 interface AppFABProps {
   /** Lucide icon name */

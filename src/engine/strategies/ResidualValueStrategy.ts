@@ -37,8 +37,6 @@ export const ResidualValueStrategy: AmortizationStrategy = {
     if (!asset.expectedLifespanMonths || asset.expectedLifespanMonths <= 0) {
       return asset.purchasePrice;
     }
-    const residual = asset.residualValue ?? 0;
-    const depreciableAmount = asset.purchasePrice - residual;
     const accumulated = this.calculateAccumulated(asset, currentDate);
     // Remaining = depreciable amount - accumulated + residual
     // But for net worth, we want the unamortized portion of the purchase price

@@ -13,7 +13,7 @@ import { MaintenanceRepository } from '@/db/maintenance-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { getDatabase } from '@/db/client';
-import { AccountType, AssetCategory, AmortizationType, AssetStatus, ExpenseFrequency } from '@/types/enums';
+import { AccountType, AssetCategory, AmortizationType, ExpenseFrequency } from '@/types/enums';
 
 interface ImportData {
   version?: number;

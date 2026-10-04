@@ -7,7 +7,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from 'react-native-paper';
-import { Wallet, BarChart3, Package, Lock } from 'lucide-react-native';
+import { Wallet } from 'lucide-react-native';
 import { AppButton } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 

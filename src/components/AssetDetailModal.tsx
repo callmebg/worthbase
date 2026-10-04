@@ -40,7 +40,7 @@ import {
   ExpenseFrequencyLabels,
   ExpenseFrequencySuffixes,
 } from '@/types/enums';
-import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
+import { resolveAssetIcon } from '@/theme/icons';
 import type { Asset, HoldingCostResult, RecurringExpense, MaintenanceRecord, SettlementResult, UsageRecord, UsageResult } from '@/types/models';
 import { MetalPriceService, type MetalPrices } from '@/services/metal-price-service';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
@@ -282,6 +282,8 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
 
     // Haptic feedback — gracefully degrade if unavailable
     try {
+      // 懒加载可选原生模块：缺失时在 try 内抛出并被吞掉，故不能用顶层 import
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Haptics = require('expo-haptics');
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}

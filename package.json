@@ -66,7 +66,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "lint:ci": "eslint . --max-warnings=64",
+    "lint:ci": "eslint . --max-warnings=23",
     "check:version": "bash ./scripts/check-version.sh",
     "verify": "npm run check:version && npm run typecheck && npm run lint:ci && npm test"
   },

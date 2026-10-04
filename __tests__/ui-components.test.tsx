@@ -11,6 +11,7 @@ import { OnboardingView } from '@/components/OnboardingView';
 import { HoldingCostBreakdown } from '@/components/HoldingCostBreakdown';
 import { ValuationChart } from '@/components/ValuationChart';
 import { LockScreen } from '@/components/LockScreen';
+import { ValuationRepository } from '@/db/valuation-repository';
 import type { HoldingCostResult } from '@/types/models';
 
 // ─── Mock dependencies ───
@@ -187,7 +188,6 @@ describe('ValuationChart', () => {
   });
 
   test('renders with valuation data', async () => {
-    const { ValuationRepository } = require('@/db/valuation-repository');
     (ValuationRepository.getByAsset as jest.Mock).mockResolvedValue([
       { id: '1', assetId: 'test', valuation: 9000, recordedDate: '2025-01-15' },
       { id: '2', assetId: 'test', valuation: 8500, recordedDate: '2025-02-15' },

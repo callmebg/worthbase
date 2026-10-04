@@ -30,7 +30,7 @@ import {
   AssetStatusColors,
   AssetCategoryLabels,
 } from '@/types/enums';
-import { ASSET_CATEGORY_ICONS, ASSET_STATUS_ICONS, resolveAssetIcon } from '@/theme/icons';
+import { ASSET_CATEGORY_ICONS, resolveAssetIcon } from '@/theme/icons';
 import type { Asset, HoldingCostResult, UsageResult } from '@/types/models';
 import { AppCard } from '@/components/ui/Card';
 import { AppChip } from '@/components/ui/Chip';
@@ -107,6 +107,8 @@ export default function AssetsScreen() {
 
     // Haptic feedback — gracefully degrade if unavailable
     try {
+      // 懒加载可选原生模块：缺失时在 try 内抛出并被吞掉，故不能用顶层 import
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Haptics = require('expo-haptics');
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}

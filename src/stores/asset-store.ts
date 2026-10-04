@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { AssetRepository } from '@/db/asset-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import type { Asset } from '@/types/models';
-import { AmortizationType, AssetCategory, AssetStatus } from '@/types/enums';
+import { AssetStatus } from '@/types/enums';
 
 type StatusFilter = 'all' | AssetStatus;
 

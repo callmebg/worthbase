@@ -11,10 +11,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, AppState } from 'react-native';
 
 import { useTheme } from 'react-native-paper';
-import { LayoutDashboard, Wallet, Package, Settings } from 'lucide-react-native';
+import { LayoutDashboard, Wallet, Package } from 'lucide-react-native';
 import { useDatabaseInit } from '@/hooks/useDatabaseInit';
 import { useSettingsStore } from '@/stores/settings-store';
-import { useAccountStore } from '@/stores/account-store';
 import { BackupService } from '@/services/backup-service';
 import { LockScreen } from '@/components/LockScreen';
 import { ThemeProvider } from '@/theme/ThemeProvider';

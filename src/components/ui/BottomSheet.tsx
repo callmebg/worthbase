@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { StyleSheet, View, Keyboard } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import BottomSheetBase, {
   BottomSheetBackdrop,
   BottomSheetScrollView,

@@ -43,9 +43,6 @@ const LIFESPAN_PRESETS = [
   { label: '10年', months: 120 },
 ];
 
-/** Maximum allowed lifespan in months (100 years) */
-const MAX_LIFESPAN_MONTHS = 1200;
-
 export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   visible: boolean;
   onClose: () => void;
@@ -209,9 +206,6 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   const priceValid = !purchasePrice.trim() || isValidPositiveNumber(purchasePrice);
   const dateValid = isValidDate(purchaseDate);
   const canProceedStep1 = name.trim() && purchasePrice.trim() && isValidPositiveNumber(purchasePrice) && dateValid;
-  const lifespanValid = !!(expectedLifespan.trim() && parseInt(expectedLifespan) > 0 && parseInt(expectedLifespan) <= MAX_LIFESPAN_MONTHS);
-  const canProceedStep2 = (amortizationType !== AmortizationType.EXPECTED_LIFESPAN || lifespanValid)
-    && (amortizationType !== AmortizationType.RESIDUAL_VALUE || (lifespanValid && residualValue.trim() && isValidPositiveNumber(residualValue)));
   const lifespanYearsError = lifespanYears.trim() && parseFloat(lifespanYears) > 100 ? '不能超过100年（1200个月）' : undefined;
 
   const handleAddRecurring = () => {
@@ -389,7 +383,6 @@ export function AddAssetModal({ visible, onClose, onSaved, editAsset }: {
   };
 
   const categories = Object.values(AssetCategory);
-  const amortTypes = Object.values(AmortizationType);
 
   return (
     <AppBottomSheet visible={visible} onClose={() => { resetForm(); onClose(); }} snapPoints={quickMode && !editAsset ? ['55%', '80%'] : ['90%', '98%']}>

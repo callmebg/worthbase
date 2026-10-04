@@ -4,7 +4,7 @@
  * Redesigned with design system, Paper components, BottomSheet, and Lucide icons.
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,

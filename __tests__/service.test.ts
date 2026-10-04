@@ -89,6 +89,8 @@ import { AssetRepository } from '@/db/asset-repository';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { SettingsRepository } from '@/db/settings-repository';
+import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
+import { MaintenanceRepository } from '@/db/maintenance-repository';
 import { AccountType, AssetCategory, AmortizationType, AssetStatus } from '@/types/enums';
 import { initMockDatabase, resetMockDatabase } from './helpers/mock-database';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -140,7 +142,7 @@ async function seedTestData() {
 // ─── Export Service Tests ───
 describe('ExportService', () => {
   test('exportJSON: writes valid JSON file with all data', async () => {
-    const { acc, asset } = await seedTestData();
+    await seedTestData();
 
     await ExportService.exportJSON();
 
@@ -173,12 +175,11 @@ describe('ExportService', () => {
 
   test('exportJSON: includes recurring expenses and maintenance records', async () => {
     const { asset } = await seedTestData();
-    const { RecurringExpenseRepository } = require('@/db/recurring-expense-repository');
-    const { MaintenanceRepository } = require('@/db/maintenance-repository');
 
+    // 故意省略 frequency：验证 repository 对旧调用方（不传该字段）默认存成 monthly（见下方断言）
     await RecurringExpenseRepository.create({
       assetId: asset.id, name: '保险费', amount: 200, effectiveFrom: '2025-01', effectiveTo: null,
-    });
+    } as any);
     await MaintenanceRepository.create({
       assetId: asset.id, name: '换屏', amount: 800, date: '2025-02-01', amortize: false,
     });
@@ -334,7 +335,7 @@ describe('ImportService', () => {
   });
 
   test('importReplace: imports all data types correctly', async () => {
-    const { acc } = await seedTestData();
+    await seedTestData();
 
     const importData = {
       version: 1,
@@ -400,7 +401,6 @@ describe('ImportService', () => {
 
     const assets = await AssetRepository.getAll();
     expect(assets).toHaveLength(1);
-    const { RecurringExpenseRepository } = require('@/db/recurring-expense-repository');
     const expenses = await RecurringExpenseRepository.getByAsset(assets[0].id);
     expect(expenses).toHaveLength(3);
     const byName: Record<string, any> = Object.fromEntries(expenses.map((e: any) => [e.name, e]));

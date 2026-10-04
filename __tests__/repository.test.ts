@@ -637,7 +637,7 @@ describe('AssetRepository - markRetired with ended_reason', () => {
       frequency: ExpenseFrequency.MONTHLY,
       effectiveFrom: '2025-01', effectiveTo: null,
     });
-    const expense2 = await RecurringExpenseRepository.create({
+    await RecurringExpenseRepository.create({
       assetId: asset.id, name: 'Expense2', amount: 30,
       frequency: ExpenseFrequency.MONTHLY,
       effectiveFrom: '2025-01', effectiveTo: null,

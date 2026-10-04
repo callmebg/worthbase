@@ -10,7 +10,7 @@ import { useAppTheme } from '@/utils/format';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppButton } from '@/components/ui/Button';
 import { Icon, IconName } from '@/components/ui/Icon';
-import { spacing, radius } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 
 interface ConfirmSheetProps {
   visible: boolean;

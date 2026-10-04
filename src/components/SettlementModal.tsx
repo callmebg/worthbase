@@ -9,7 +9,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
 } from 'react-native';
 import { useAppTheme, formatCurrency, getCurrentDate } from '@/utils/format';
 import { DatePickerField } from './DatePickerField';
@@ -21,7 +20,6 @@ import { useToast } from '@/hooks/useToast';
 import { AppBottomSheet } from '@/components/ui/BottomSheet';
 import { AppTextInput } from '@/components/ui/TextInput';
 import { AppButton } from '@/components/ui/Button';
-import { AppCard } from '@/components/ui/Card';
 import { radius } from '@/theme/tokens';
 
 export function SettlementModal({ visible, asset, onClose, onConfirm }: {
