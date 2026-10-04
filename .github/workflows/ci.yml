@@ -58,7 +58,7 @@ jobs:
       - name: Run tests
         run: npm test
 
-  # ─── Android 构建：慢（要装 SDK），所以放在门禁之后，且 PR 上不跑 ───
+  # ─── Android 构建：用 runner 镜像自带的 Android SDK（不再自装），所以放在门禁之后，且 PR 上不跑 ───
   android-build:
     name: Android release build
     runs-on: ubuntu-latest
@@ -84,54 +84,10 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Restore Android SDK subdirs cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ runner.temp }}/android-sdk/cmdline-tools
-            ${{ runner.temp }}/android-sdk/platforms
-            ${{ runner.temp }}/android-sdk/build-tools
-            ${{ runner.temp }}/android-sdk/platform-tools
-          key: android-sdk-${{ runner.os }}-v1
-          restore-keys: |
-            android-sdk-${{ runner.os }}-
-
-      - name: Install Android SDK command-line tools (if needed)
-        env:
-          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
-        run: |
-          set -e
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends unzip wget lib32stdc++6 lib32z1
-          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-          if [ -d "$ANDROID_SDK_ROOT/platform-tools" ] && [ -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ] && [ -d "$ANDROID_SDK_ROOT/platforms/android-33" ] && [ -d "$ANDROID_SDK_ROOT/build-tools/33.0.2" ]; then
-            echo "Android SDK components already present in cache, skipping download.";
-          else
-            cd "$ANDROID_SDK_ROOT/cmdline-tools"
-            curl -fSL "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip" -o cmdline-tools.zip
-            unzip -q cmdline-tools.zip
-            if [ -d cmdline-tools ]; then
-              mv cmdline-tools latest || true
-            else
-              mkdir -p latest
-              mv * latest 2>/dev/null || true
-            fi
-            export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
-            yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
-            sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
-          fi
-
-      - name: Save Android SDK subdirs to cache
-        if: always()
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ runner.temp }}/android-sdk/cmdline-tools
-            ${{ runner.temp }}/android-sdk/platforms
-            ${{ runner.temp }}/android-sdk/build-tools
-            ${{ runner.temp }}/android-sdk/platform-tools
-          key: android-sdk-${{ runner.os }}-v1
+      # runner 镜像已预装 Android SDK 并接受好许可证（ANDROID_HOME=/usr/local/lib/android/sdk），
+      # 缺的 platform / build-tools / ndk 由 AGP 在构建时按需自动下载。
+      # 不要再另装一份 SDK 并导出 ANDROID_SDK_ROOT —— 那会和 ANDROID_HOME 指向不同路径，
+      # 触发 AGP 的 “Several environment variables ... contain different paths to the SDK” 报错。
 
       - name: Prebuild Android (generate native project)
         run: npx expo prebuild --platform android --non-interactive
@@ -162,14 +118,11 @@ jobs:
       # gradlew 缺失同样视为失败（prebuild 本该生成它），不再静默跳过。
       - name: Build Android release APK (local)
         env:
-          ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
           JAVA_HOME: ${{ env.JAVA_HOME }}
           GRADLE_USER_HOME: ${{ runner.temp }}/.gradle
         working-directory: android
         run: |
           set -e
-          export ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
           if [ ! -f gradlew ]; then
             echo "::error::android/gradlew 不存在 —— expo prebuild 未生成原生工程"
             exit 1
