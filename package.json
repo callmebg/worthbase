@@ -1,6 +1,6 @@
 {
   "name": "worthbase",
-  "version": "1.7.2",
+  "version": "1.8.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",
