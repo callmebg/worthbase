@@ -22,8 +22,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { InteractiveTrendChart } from '@/components/InteractiveTrendChart';
 import { useAccountStore } from '@/stores/account-store';
 import { useAssetStore } from '@/stores/asset-store';
+import { useCashFlowStore } from '@/stores/cash-flow-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { NetWorthCalculator } from '@/engine/NetWorthCalculator';
+import { CashFlowCalculator } from '@/engine/CashFlowCalculator';
 import { ProjectionCalculator } from '@/engine/ProjectionCalculator';
 import type { ProjectionDetail } from '@/engine/ProjectionCalculator';
 import { GoalProjectionExplainer } from '@/components/GoalProjectionExplainer';
@@ -69,6 +71,8 @@ export default function DashboardScreen() {
   }, [navigation, router, theme.colors.onSurface]);
   const { accounts, loadAccounts } = useAccountStore();
   const { assets, loadAssets } = useAssetStore();
+  // 现金流变动会改变预测，所以它是 loadData 的依赖之一
+  const { cashFlows, loadCashFlows } = useCashFlowStore();
   const { netWorthGoal, currencySymbol, update } = useSettingsStore();
   const toast = useToast();
 
@@ -106,6 +110,9 @@ export default function DashboardScreen() {
     const nw = await NetWorthCalculator.calculate(now);
     setNetWorth(nw);
 
+    // 现金流取自 store，也就是用户刚编辑过的那份
+    const cashFlow = await CashFlowCalculator.fromCashFlows(cashFlows);
+
     const activeAssets = assets.filter(a => a.status === AssetStatus.ACTIVE);
     const totalMC = await HoldingCostCalculator.getTotalMonthly(activeAssets, now);
     setTotalMonthlyCost(totalMC);
@@ -128,7 +135,6 @@ export default function DashboardScreen() {
 
     // ── Trend data: same formula as hero card ──────────────────────────────────
     // net worth = account balances + asset valuations
-    const activeAccountIds = new Set(accounts.map(a => a.id));
     const trackedAssets = activeAssets.filter(a => a.valuationTracking);
 
     // Pre-fetch all valuation histories ONCE (not inside the date loop)
@@ -175,61 +181,37 @@ export default function DashboardScreen() {
     // ALL dates in chronological order (for fullscreen chart with gesture navigation)
     const allDatesChrono = [...allDates].reverse();
 
-    // Pre-compute balance totals and valuations for each date (reused for both filtered and full data)
-    const balanceTotals = new Map<string, number>();
-    const valuationTotals = new Map<string, number>();
-
-    // 1. Fetch ALL snapshots once and compute running balance per date.
-    //    This fixes the bug where only accounts with a snapshot on the exact
-    //    date were counted — now we carry forward the last known balance for
-    //    every account, so unchanged accounts are still included.
+    // 按日期的余额结转 + 估值聚合统一交给引擎层，UI 只负责渲染。
+    // 余额按「结转」算（当天没更新的账户沿用最近一次余额），估值取该日之前最近一条、
+    // 无记录时回落购入价 —— 与搬进引擎之前的行为逐点一致。
     const allSnapshots = await BalanceSnapshotRepository.getAllSnapshotsChronological();
-    const runningBalances = new Map<string, number>();
-    let snapIdx = 0;
-    for (const date of allDatesChrono) {
-      while (snapIdx < allSnapshots.length && allSnapshots[snapIdx].snapshotDate <= date) {
-        runningBalances.set(allSnapshots[snapIdx].accountId, allSnapshots[snapIdx].balance);
-        snapIdx++;
-      }
-      let totalBalance = 0;
-      for (const [accountId, b] of runningBalances.entries()) {
-        if (activeAccountIds.has(accountId)) totalBalance += b;
-      }
-      balanceTotals.set(date, totalBalance);
-
-      // 2. Asset valuations — lookup in pre-fetched history (reverse scan for latest ≤ date)
-      let totalValuation = 0;
-      for (const asset of trackedAssets) {
-        const history = valuationHistories.get(asset.id) ?? [];
-        let latestVal: number | null = null;
-        for (let i = history.length - 1; i >= 0; i--) {
-          if (history[i].recordedDate <= date) {
-            latestVal = history[i].valuation;
-            break;
-          }
-        }
-        // Fallback to purchase price if no valuation record exists before this date
-        totalValuation += latestVal ?? asset.purchasePrice;
-      }
-      valuationTotals.set(date, totalValuation);
-    }
+    const series = NetWorthCalculator.buildTrendSeries({
+      accounts,
+      trackedAssets,
+      valuationHistories,
+      dates: allDatesChrono,
+      snapshots: allSnapshots,
+    });
+    const valueAt = (date: string) => series.get(date)?.netWorth ?? 0;
 
     // Filtered data (for overview chart, hero card, projection)
     const allPoints: { date: string; value: number }[] = recentDates.map(date => ({
       date,
-      value: (balanceTotals.get(date) ?? 0) + (valuationTotals.get(date) ?? 0),
+      value: valueAt(date),
     }));
 
     // Full data (for fullscreen chart — gestures need full data for operating space)
     const allPointsFull: { date: string; value: number }[] = allDatesChrono.map(date => ({
       date,
-      value: (balanceTotals.get(date) ?? 0) + (valuationTotals.get(date) ?? 0),
+      value: valueAt(date),
     }));
 
-    // Estimate goal achievement date based on historical trend
-    if (netWorthGoal && allPoints.length >= 2) {
-      const detail = ProjectionCalculator.estimateProjectionDetail(allPoints, netWorthGoal);
-      setAchievementDate(detail?.achievementDate ?? null);
+    // 目标预测：已知现金流为主项，历史回归退化为残差项。
+    // 数据点不足由 ProjectionCalculator 自己判定并回 'insufficient-data'，
+    // 不再在这里用 length >= 2 短路——UI 需要区分三态，不能静默空白。
+    if (netWorthGoal) {
+      const detail = ProjectionCalculator.estimateProjectionDetail(allPoints, netWorthGoal, cashFlow);
+      setAchievementDate(detail.achievementDate);
       setProjectionDetail(detail);
     } else {
       setAchievementDate(null);
@@ -247,12 +229,14 @@ export default function DashboardScreen() {
     const allFullDates = allPointsFull.map(p => p.date);
     const allValues = allPointsFull.map(p => p.value);
     setAllTrendData({ labels: allLabels, fullDates: allFullDates, datasets: [{ data: allValues }] });
-  }, [assets, accounts, timeRange, netWorthGoal]);
+  }, [assets, accounts, cashFlows, timeRange, netWorthGoal]);
 
   useFocusEffect(useCallback(() => {
     loadAccounts();
     loadAssets();
-  }, [loadAccounts, loadAssets]));
+    // 从「固定收支」页回来后要重算预测，所以现金流也在这里刷新
+    loadCashFlows();
+  }, [loadAccounts, loadAssets, loadCashFlows]));
 
   useEffect(() => {
     loadData();
@@ -333,6 +317,31 @@ export default function DashboardScreen() {
           {formatCurrency(netWorth?.netWorth ?? 0, currencySymbol)}
         </Text>
 
+        {/* 构成拆分：净资产总额一分未变，只是把它拆开给人看。
+            「受限」为 0 时整项不渲染，回落到原来的两项布局。 */}
+        <View style={styles.heroStatRow}>
+          <View style={styles.heroStatItem}>
+            <Text style={[styles.heroStatLabel, { color: theme.colors.onPrimary }]}>可用</Text>
+            <Text style={[styles.heroStatValue, { color: theme.colors.onPrimary }]}>
+              {formatCompactCurrency(netWorth?.availableLiquid ?? 0, currencySymbol)}
+            </Text>
+          </View>
+          {(netWorth?.restrictedLiquid ?? 0) !== 0 && (
+            <View style={styles.heroStatItem}>
+              <Text style={[styles.heroStatLabel, { color: theme.colors.onPrimary }]}>受限</Text>
+              <Text style={[styles.heroStatValue, { color: theme.colors.onPrimary }]}>
+                {formatCompactCurrency(netWorth?.restrictedLiquid ?? 0, currencySymbol)}
+              </Text>
+            </View>
+          )}
+          <View style={styles.heroStatItem}>
+            <Text style={[styles.heroStatLabel, { color: theme.colors.onPrimary }]}>资产估值</Text>
+            <Text style={[styles.heroStatValue, { color: theme.colors.onPrimary }]}>
+              {formatCompactCurrency(netWorth?.assetValuations ?? 0, currencySymbol)}
+            </Text>
+          </View>
+        </View>
+
         {netWorthGoal ? (
           <View style={styles.progressRow}>
             <View style={styles.progressBar}>
@@ -351,9 +360,14 @@ export default function DashboardScreen() {
             hitSlop={8}
           >
             <Text style={[styles.goalHint, { color: theme.colors.onPrimary }, projectionDetail && { textDecorationLine: 'underline' }]}>
+              {/* 三态都要说话，不允许静默空白 */}
               {achievementDate
                 ? `预计 ${achievementDate.substring(0, 4)}年${achievementDate.substring(5, 7)}月 达成`
-                : '按当前趋势暂无法预估'}
+                : projectionDetail?.state === 'unreachable'
+                  ? '按当前速度暂时达不成'
+                  : projectionDetail?.state === 'insufficient-data'
+                    ? '数据还不够，点我看看要补什么'
+                    : '按当前趋势暂无法预估'}
             </Text>
           </TouchableOpacity>
         )}
@@ -711,6 +725,11 @@ const styles = StyleSheet.create({
   heroLabel: { fontSize: 14, opacity: 0.85 },
   infoIconBtn: { opacity: 0.7, padding: 2 },
   heroAmount: { fontSize: 36, fontWeight: '700', marginTop: spacing.xs },
+  // 净资产构成：可用 / 受限 / 资产估值
+  heroStatRow: { flexDirection: 'row', marginTop: spacing.md, gap: spacing.lg },
+  heroStatItem: { gap: 2 },
+  heroStatLabel: { fontSize: 11, opacity: 0.7 },
+  heroStatValue: { fontSize: 14, fontWeight: '600' },
   progressRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm + spacing.xs, gap: spacing.sm },
   progressBar: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 3 },
   progressFill: { height: 6, borderRadius: 3 },

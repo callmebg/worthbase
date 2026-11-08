@@ -1,6 +1,11 @@
 /**
  * WorthBase (家底) - Recurring Expense Repository
  * CRUD + query by effective interval for recurring expenses.
+ *
+ * 领域边界（见 design.md D4）：本表只管**依附于资产**的经常性支出（车险、依附于
+ * 房产的物业费），`asset_id` 保持 NOT NULL，喂持有成本 / 结算计算。
+ * 房租、宽带、人寿险这类不依附于资产的支出，以及全部固定收入，走
+ * `cash_flows` 表（见 cash-flow-repository.ts）。两表按构造互斥，相加不会重复计算。
  */
 
 import { getDatabase, generateId } from './client';
@@ -34,6 +39,18 @@ function rowToRecurringExpense(row: RecurringExpenseRow): RecurringExpense {
 }
 
 export const RecurringExpenseRepository = {
+  /**
+   * All asset-attached recurring expenses across every asset, including ended ones.
+   * Used by the cash flow layer, which filters by effective month in memory.
+   */
+  async getAll(): Promise<RecurringExpense[]> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<RecurringExpenseRow>(
+      `SELECT * FROM recurring_expenses ORDER BY effective_from;`
+    );
+    return rows.map(rowToRecurringExpense);
+  },
+
   async getByAsset(assetId: string): Promise<RecurringExpense[]> {
     const db = getDatabase();
     const rows = await db.getAllAsync<RecurringExpenseRow>(

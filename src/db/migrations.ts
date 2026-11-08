@@ -6,7 +6,7 @@
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const CURRENT_VERSION = 10;
+const CURRENT_VERSION = 11;
 
 interface Migration {
   version: number;
@@ -161,6 +161,43 @@ const migrations: Migration[] = [
           ALTER TABLE recurring_expenses ADD COLUMN frequency TEXT NOT NULL DEFAULT 'monthly';
         `);
       }
+    },
+  },
+  // Version 11: 未来可用资产 —— accounts.maturity_date + cash_flows 表
+  //
+  // 刻意不含任何改表重建：client.ts 开了 `PRAGMA foreign_keys = ON`，而 runMigrations
+  // 把每个 migration 包在 BEGIN/COMMIT 里，SQLite 中该 pragma 在事务内是 no-op，
+  // 标准的「先关外键再重建表」流程在本项目框架下做不到。
+  // 因此 recurring_expenses.asset_id 保持 NOT NULL，家庭现金流走新的 cash_flows 表。
+  // 详见 openspec/changes/future-usable-assets/design.md 决策 D4。
+  {
+    version: 11,
+    description: 'Add accounts.maturity_date and cash_flows table for usable-assets forecast',
+    up: async (db: SQLiteDatabase) => {
+      const columns: { name: string }[] = await db.getAllAsync('PRAGMA table_info(accounts);');
+      const hasMaturityDate = columns.some((column) => column.name === 'maturity_date');
+
+      if (!hasMaturityDate) {
+        await db.execAsync(`
+          ALTER TABLE accounts ADD COLUMN maturity_date TEXT;
+        `);
+      }
+
+      await db.execAsync(`
+        CREATE TABLE IF NOT EXISTS cash_flows (
+          id TEXT PRIMARY KEY NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'expense',
+          name TEXT NOT NULL,
+          amount REAL NOT NULL,
+          frequency TEXT NOT NULL DEFAULT 'monthly',
+          effective_from TEXT NOT NULL,
+          effective_to TEXT,
+          note TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_cash_flow_effective ON cash_flows(effective_from, effective_to);
+        CREATE INDEX IF NOT EXISTS idx_cash_flow_kind ON cash_flows(kind);
+      `);
     },
   },
 ];

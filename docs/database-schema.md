@@ -144,6 +144,7 @@ initDatabase()
 | `assets` | `maintenance_records` | 1:N | **CASCADE** — 删除资产自动清除所有维护记录 |
 | `assets` | `valuation_history` | 1:N | **CASCADE** — 删除资产自动清除所有估值历史 |
 | `settings` | — | 独立 | 无外键关系 |
+| `cash_flows` | — | 独立 | 无外键关系（家庭层面现金流，刻意不挂到任何资产上） |
 
 ---
 
@@ -160,6 +161,7 @@ initDatabase()
 | `type` | TEXT | NOT NULL | 账户类型，取值见下方枚举 |
 | `icon` | TEXT | 可空 | 自定义图标标识 |
 | `sort_order` | INTEGER | NOT NULL, DEFAULT 0 | 排序权重，越小越靠前 |
+| `maturity_date` | TEXT | 可空 | 到期日（YYYY-MM-DD）。定期存款未到期前不计入「可用资金」，到期当天及之后计入；始终计入净资产。NULL = 随时可动用。**只记本金，不存利率、不算利息** |
 | `deleted_at` | TEXT | 可空 | 软删除时间戳，NULL 表示活跃 |
 | `created_at` | TEXT | NOT NULL | 创建时间（ISO 8601） |
 | `updated_at` | TEXT | NOT NULL | 最后更新时间（ISO 8601） |
@@ -173,11 +175,16 @@ initDatabase()
 | `bank_card` | 银行卡 | 银行储蓄卡 |
 | `cash` | 现金 | 手持现金 |
 | `fund` | 基金 | 基金/理财账户 |
+| `provident_fund` | 公积金 | 住房公积金（受限类，见下） |
 | `credit_card` | 信用卡 | 信用卡（负债类） |
 | `loan` | 贷款 | 贷款（负债类） |
 | `other` | 其他 | 其他类型 |
 
 > **负债类型标记：** `credit_card` 和 `loan` 被归类为负债账户（`LIABILITY_ACCOUNT_TYPES`），其余额表示欠款而非资产。
+
+> **受限类型标记：** `provident_fund` 被归类为受限账户（`RESTRICTED_ACCOUNT_TYPES`），与负债集合同构。受限账户**计入净资产但不可自由支配**，因此不算进「可用资金」。
+>
+> 流动性由**类型携带语义**，没有账户级的「是否计入净资产」开关。此外，任何带 `maturity_date` 且未到期的账户也会被临时归入受限（见 `src/engine/accountBuckets.ts`）——公积金是永久受限，定期存款是临时受限，对用户意味着同一件事：这笔钱现在动不了。
 
 **索引：**
 - `idx_accounts_deleted_at` — 加速软删除筛选查询
@@ -395,6 +402,41 @@ WHERE effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)
 
 ---
 
+### 8. `cash_flows` — 家庭现金流表
+
+**用途：** 存储**不依附于任何资产**的周期性现金流：房租、宽带、人寿险这类固定支出，以及全部固定收入（月薪、季度奖、年终奖）。是「未来可用资金」与目标达成预测的输入。
+
+| 列名 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | TEXT | PRIMARY KEY, NOT NULL | 唯一标识符 |
+| `kind` | TEXT | NOT NULL, DEFAULT `'expense'` | 方向：`expense`（固定支出）/ `income`（固定收入） |
+| `name` | TEXT | NOT NULL | 名称（如「房租」「月薪」） |
+| `amount` | REAL | NOT NULL | 每个计费周期的金额 |
+| `frequency` | TEXT | NOT NULL, DEFAULT `'monthly'` | 计费周期：`monthly` / `quarterly` / `yearly`，计算时折算为月度等价（÷1 / ÷3 / ÷12） |
+| `effective_from` | TEXT | NOT NULL | 生效起始月（YYYY-MM），含当月 |
+| `effective_to` | TEXT | 可空 | 生效结束月（YYYY-MM），含当月；NULL 表示持续中 |
+| `note` | TEXT | 可空 | 备注 |
+| `created_at` | TEXT | NOT NULL | 创建时间（ISO 8601） |
+
+**无外键关系。** 刻意不挂到 `assets` 上——这是本表存在的理由。
+
+**与 `recurring_expenses` 的领域划分：**
+
+| 表 | 管什么 | 谁消费 |
+|----|--------|--------|
+| `recurring_expenses` | 依附于资产的支出（车险、绑在房子上的物业费） | `HoldingCostCalculator` / `SettlementCalculator` |
+| `cash_flows` | 家庭层面的收支（房租、宽带、人寿险 + 全部收入） | `ProjectionCalculator` / `UsableAssetsCalculator` |
+
+两者按构造互斥（一张 asset-scoped、一张 household-scoped），相加不会重复计算。
+
+> **为什么不把 `recurring_expenses.asset_id` 改成可空？** `client.ts` 开了 `PRAGMA foreign_keys = ON`，而 `runMigrations` 把每个 migration 包在 `BEGIN/COMMIT` 里——SQLite 中该 pragma 在事务内是 no-op，标准的「先关外键 → 建新表 → 迁数据 → 改名」流程走不通。加新表能表达完全一样的东西，且不污染已经稳定的持有成本链路。详见 `openspec/changes/future-usable-assets/design.md` 决策 D4。
+
+**索引：**
+- `idx_cash_flow_effective` (`effective_from`, `effective_to`) — 按生效月份筛选
+- `idx_cash_flow_kind` (`kind`) — 按收支方向筛选
+
+---
+
 ## 索引设计
 
 所有索引均使用 `CREATE INDEX IF NOT EXISTS` 创建，确保幂等性。
@@ -411,6 +453,8 @@ WHERE effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)
 | `idx_assets_status` | `assets` | `status` | 按资产状态筛选（使用中/退役/已售） |
 | `idx_assets_category` | `assets` | `category` | 按资产分类筛选 |
 | `idx_accounts_deleted_at` | `accounts` | `deleted_at` | 加速软删除筛选（迁移 V3 添加） |
+| `idx_cash_flow_effective` | `cash_flows` | `effective_from, effective_to` | 按生效月份筛选现金流（迁移 V11 添加） |
+| `idx_cash_flow_kind` | `cash_flows` | `kind` | 按收支方向筛选（迁移 V11 添加） |
 
 ---
 
@@ -420,7 +464,7 @@ WHERE effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)
 
 迁移系统基于 **递增版本号** 工作：
 
-1. 代码中定义 `CURRENT_VERSION` 常量（当前为 **5**）
+1. 代码中定义 `CURRENT_VERSION` 常量（当前为 **11**）
 2. 数据库内部维护 `db_version` 表记录已应用的版本
 3. 初始化时比较当前数据库版本与 `CURRENT_VERSION`，执行所有未应用的迁移
 
@@ -452,6 +496,8 @@ runMigrations(db)
 - **幂等性 (Idempotent)：** 每个迁移函数内部检查目标列/索引是否已存在（通过 `PRAGMA table_info` 或 `IF NOT EXISTS`），即使重复执行也不会出错
 - **事务隔离：** 每个迁移在独立事务中执行，单个迁移失败不影响已成功的迁移
 - **顺序执行：** 迁移按版本号从小到大依次执行，不会跳过任何版本
+- **⚠️ 不能重建表：** 上一条「事务隔离」有个代价——`client.ts` 在初始化时执行了 `PRAGMA foreign_keys = ON`，而 SQLite 规定该 pragma **在事务内是 no-op**。因此标准的 12 步改表流程（`PRAGMA foreign_keys=OFF` → 建新表 → 迁数据 → DROP → RENAME → 重建索引）里「先关外键」这一步在本项目中做不到。
+  **可用的迁移操作只有两种：** `ALTER TABLE ... ADD COLUMN`（配 `PRAGMA table_info` 探测保证幂等）和 `CREATE TABLE IF NOT EXISTS`。需要改变已有表的列约束时，加新表而不是重建旧表——v11 的 `cash_flows` 就是这么来的（详见 `openspec/changes/future-usable-assets/design.md` D4）。
 
 ### 已有迁移列表
 

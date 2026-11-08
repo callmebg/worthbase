@@ -25,8 +25,16 @@ const TAB_CONFIG = [
   { name: 'assets', title: '资产', Icon: Package },
 ];
 
-/** Settings is hidden from tab bar — accessed via gear icon on dashboard */
-const HIDDEN_TABS = ['settings'];
+/**
+ * Routes hidden from the tab bar — reached from inside other screens.
+ * 设置：总览页齿轮图标。固定收支 / 可用资金：账户页顶部入口（钱的事归账户页，
+ * 不放设置页——设置页管的是 App 本身：安全、外观、数据）。
+ */
+const HIDDEN_TABS: { name: string; title: string }[] = [
+  { name: 'settings', title: '设置' },
+  { name: 'cash-flow', title: '固定收支' },
+  { name: 'usable-assets', title: '可用资金' },
+];
 
 export default function RootLayout() {
   return (
@@ -137,13 +145,13 @@ function RootLayoutInner() {
                 />
               );
             })}
-            {HIDDEN_TABS.map(name => (
+            {HIDDEN_TABS.map(tab => (
               <Tabs.Screen
-                key={name}
-                name={name}
+                key={tab.name}
+                name={tab.name}
                 options={{
                   href: null,
-                  title: name === 'settings' ? '设置' : name,
+                  title: tab.title,
                 }}
               />
             ))}

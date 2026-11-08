@@ -9,11 +9,19 @@ import { AccountRepository } from '@/db/account-repository';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { AssetRepository } from '@/db/asset-repository';
 import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
+import { CashFlowRepository } from '@/db/cash-flow-repository';
 import { MaintenanceRepository } from '@/db/maintenance-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { getDatabase } from '@/db/client';
-import { AccountType, AssetCategory, AmortizationType, ExpenseFrequency } from '@/types/enums';
+import {
+  AccountType,
+  AssetCategory,
+  AmortizationType,
+  ExpenseFrequency,
+  normalizeCashFlowKind,
+  normalizeExpenseFrequency,
+} from '@/types/enums';
 
 interface ImportData {
   version?: number;
@@ -22,6 +30,8 @@ interface ImportData {
   balanceSnapshots?: any[];
   assets?: any[];
   recurringExpenses?: any[];
+  /** 家庭现金流；v1.7 之前的备份没有这个字段，导入时回落为空集 */
+  cashFlows?: any[];
   maintenanceRecords?: any[];
   valuationHistory?: any[];
   settings?: any;
@@ -61,6 +71,7 @@ export const ImportService = {
       await db.execAsync(`
         DELETE FROM balance_snapshots;
         DELETE FROM recurring_expenses;
+        DELETE FROM cash_flows;
         DELETE FROM maintenance_records;
         DELETE FROM valuation_history;
         DELETE FROM accounts;
@@ -80,6 +91,8 @@ export const ImportService = {
           }
           const created = await AccountRepository.create({
             name: a.name, type: a.type, icon: a.icon ?? null, sortOrder: a.sortOrder ?? 0,
+            // 老备份没有 maturityDate —— 回落 null（随时可动用）
+            maturityDate: a.maturityDate ?? null,
           });
           accountIdMap.set(a.id, created.id);
         }
@@ -135,6 +148,22 @@ export const ImportService = {
               ? (re.frequency as ExpenseFrequency)
               : ExpenseFrequency.MONTHLY,
             effectiveFrom: re.effectiveFrom, effectiveTo: re.effectiveTo ?? null,
+          });
+        }
+      }
+
+      // Import household cash flows — 无外键，不需要重映射 ID
+      // 老备份（v1.7 之前）没有 cashFlows 段，直接跳过；非法 kind/frequency 回落到默认值
+      if (data.cashFlows) {
+        for (const cf of data.cashFlows) {
+          await CashFlowRepository.create({
+            kind: normalizeCashFlowKind(cf.kind),
+            name: cf.name,
+            amount: cf.amount,
+            frequency: normalizeExpenseFrequency(cf.frequency),
+            effectiveFrom: cf.effectiveFrom,
+            effectiveTo: cf.effectiveTo ?? null,
+            note: cf.note ?? null,
           });
         }
       }

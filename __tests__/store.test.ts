@@ -68,6 +68,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     type: AccountType.WECHAT,
     icon: null,
     sortOrder: 1,
+    maturityDate: null,
     deletedAt: null,
     createdAt: '2025-01-01T00:00:00Z',
     updatedAt: '2025-01-01T00:00:00Z',

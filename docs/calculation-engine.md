@@ -14,11 +14,14 @@ WorthBase 的计算引擎采用**策略模式（Strategy Pattern）** + **组合
 |------|------|------|
 | 分摊策略（4种） | 计算购入价的月度分摊 | `strategies/` |
 | 持有成本计算器 | 汇总分摊 + 经常性支出 + 维护 | `HoldingCostCalculator.ts` |
-| 净资产计算器 | 账户余额 + 资产估值 | `NetWorthCalculator.ts` |
+| 净资产计算器 | 账户余额（按流动性分桶）+ 资产估值 + 趋势序列聚合 | `NetWorthCalculator.ts` |
+| 账户流动性分桶 | 判定每个账户是 可用 / 受限 / 负债 | `accountBuckets.ts` |
 | 卖出结算计算器 | 卖出时的财务结算 | `SettlementCalculator.ts` |
-| 经常性支出计算器 | 按月生效的周期性支出 | `RecurringExpenseCalculator.ts` |
+| 经常性支出计算器 | 按月生效的周期性支出（资产附属） | `RecurringExpenseCalculator.ts` |
+| 现金流计算器 | 家庭固定收支 + 资产附属支出 → 每月净流量 | `CashFlowCalculator.ts` |
+| 可用资金计算器 | 指定日期能拿出多少钱 | `UsableAssetsCalculator.ts` |
 | 维护费计算器 | 一次性维护支出的分摊 | `MaintenanceCalculator.ts` |
-| 净资产预测计算器 | 线性回归预测目标达成日期 | `ProjectionCalculator.ts` |
+| 净资产预测计算器 | 已知现金流为主 + 历史回归为残差，预测目标达成日期 | `ProjectionCalculator.ts` |
 | 分摊推荐引擎 | 根据资产类别推荐分摊方式 | `AmortizationRecommender.ts` |
 
 ---
@@ -470,7 +473,12 @@ monthDiff(from, to) = (toYear - fromYear) × 12 + (toMonth - fromMonth)
 ### 公式
 
 ```
-流动资产 = Σ(所有账户的最新余额)
+账户余额按流动性分三桶（见 src/engine/accountBuckets.ts）：
+  可用 available  = 非负债类型、非受限类型、且（无到期日 或 已到期）
+  受限 restricted = 受限类型（公积金），或 有到期日且未到期
+  负债 liability  = 信用卡、贷款
+
+流动资产 liquidAssets = 可用 + 受限 + 负债   // 数值与分桶之前完全一致，仅标 @deprecated
 
 资产估值 = Σ(开启估值追踪的活跃资产的最新估值)
 
@@ -479,15 +487,25 @@ monthDiff(from, to) = (toYear - fromYear) × 12 + (toMonth - fromMonth)
 未分摊成本 = Σ(活跃资产的剩余未分摊购入价)  // 内部参考，不展示给用户
 ```
 
+> **净资产总额一分未变。** 分桶拆的只是构成，不动任何历史数字——趋势线是按余额快照实时聚合的，如果改变净资产口径，用户的历史曲线会整体平移，那是「App 改了我的钱」，最伤信任。
+
 ### 示例
 
-| 账户 | 余额 |
-|------|------|
-| 微信 | ¥5,000 |
-| 支付宝 | ¥12,000 |
-| 银行卡 | ¥80,000 |
-| 信用卡 | -¥3,000 |
-| **流动资产** | **¥94,000** |
+| 账户 | 类型 | 到期日 | 余额 | 归桶 |
+|------|------|--------|------|------|
+| 微信 | wechat | — | ¥5,000 | 可用 |
+| 支付宝 | alipay | — | ¥12,000 | 可用 |
+| 银行卡 | bank_card | — | ¥80,000 | 可用 |
+| 三年定期 | bank_card | 2027-06-30（未到） | ¥50,000 | **受限** |
+| 公积金 | provident_fund | — | ¥30,000 | **受限** |
+| 信用卡 | credit_card | — | -¥3,000 | 负债 |
+
+```
+可用   = 5,000 + 12,000 + 80,000      = ¥97,000
+受限   = 50,000 + 30,000              = ¥80,000
+负债   = -3,000                        = -¥3,000
+流动资产 = 97,000 + 80,000 - 3,000     = ¥174,000
+```
 
 | 资产 | 估值 | 是否追踪 |
 |------|------|---------|
@@ -497,7 +515,7 @@ monthDiff(from, to) = (toYear - fromYear) × 12 + (toMonth - fromMonth)
 | **资产估值** | **¥128,000** | |
 
 ```
-净资产 = 94,000 + 128,000 = ¥222,000
+净资产 = 174,000 + 128,000 = ¥302,000
 ```
 
 ### 目标进度
@@ -611,13 +629,31 @@ y_i = value_i
 slope = (n × Σ(x_i × y_i) - Σx_i × Σy_i) / (n × Σ(x_i²) - (Σx_i)²)
 ```
 
-**3. 预测达成日期**
+> 斜率现在叫 **残差斜率 residualSlope**，它只负责解释「历史里我没建模的那部分」（消费波动、估值涨跌）。**不再对 `slope ≤ 0` 短路** —— 负斜率是有效信息，不是「算不出来」。
+
+**3. 已知现金流作为主项，逐月推进**
 
 ```
-gap = goal - currentValue
-monthsNeeded = gap / slope
-achievementDate = lastDate + monthsNeeded × 30.44 天
+anchorMonth = 最后一个历史数据点所在月
+value = currentValue
+
+for i = 1 .. 600:                       // 上限 50 年，防死循环
+    month = anchorMonth + i 个月
+    value += 该月已知净流入(month) + residualSlope
+    if value >= goal:
+        // 在本月内线性插值，得到具体日期而不是粗暴的月末
+        fraction = (goal - 上一步的 value) / 本月增量
+        monthsNeeded = (i - 1) + fraction
+        achievementDate = lastDate + monthsNeeded × 30.44 天
+        state = 'achievable'
+        break
 ```
+
+**逐月求值而不是「月额 × 月数」**：每条现金流都有自己的 `effective_from` / `effective_to`，跨越生效边界的月份必须按该月实际生效的条目重新求和。
+
+**当前月不计入**：`i` 从 1 开始，锚点当月被跳过——账户最新余额快照已经反映了本月的现金流，再算一遍就是重复计算。
+
+已知净流入的构成见「十、现金流计算器」。
 
 ### 示例
 
@@ -648,21 +684,121 @@ slope = (6 × 2978000 - 15 × 1155000) / (6 × 55 - 15²)
       ≈ ¥5,171/月
 
 gap = 300000 - 206000 = ¥94,000
-monthsNeeded = 94000 / 5171 ≈ 18.2 个月
+逐月累加 5171，第 18 个月末 = 299,078（未达），第 19 个月末 = 304,249（超过）
+fraction = (300000 - 299078) / 5171 ≈ 0.18
+monthsNeeded = 18 + 0.18 ≈ 18.2 个月
 
 预计达成日期 ≈ 2025-06 + 18.2月 ≈ 2026-12
 ```
 
-### 返回 `null` 的情况
+（本例假设用户没录入任何现金流。若他录了月薪 ¥20,000、房租 ¥4,500，则每月增量变成 5171 + 15500 = 20,671，达成时间大幅提前——**这正是这次重写的意义：确定的钱优先，猜测的部分退居残差。**）
 
-- 数据点少于 2 个
-- 所有数据点 x 值相同（无法做回归）
-- 斜率 ≤ 0（净资产没有增长或在下降）
-- 当前净资产已经 ≥ 目标
+### 四种结论（`state`）
+
+预测不再「算不出就返回 null」，而是显式区分四态，UI 必须把话说清楚：
+
+| state | 触发条件 | `achievementDate` | UI 该怎么说 |
+|-------|---------|-------------------|------------|
+| `achieved` | 当前净资产 ≥ 目标 | `null` | 目标已达成 |
+| `achievable` | 逐月推进在 600 个月内越过目标 | 具体日期 | 预计 X年X月 达成 |
+| `unreachable` | 已知净流入 + 残差斜率 ≤ 0，推不到目标 | `null` | 按当前速度达不成，**并给出缺口与月度净流入** |
+| `insufficient-data` | 一个历史数据点都没有（连当前值都锚不住） | `null` | 告诉用户该补什么（更新余额 / 录入固定收支） |
+
+`estimateAchievementDate()` 仍返回 `string | null`，向后兼容——它取的就是 `achievementDate`，上表后三行都返回 `null`，与改动前的行为一致。
+
+**没有现金流时结果与改动前完全一致**（回归兼容测试见 `__tests__/usable-assets.test.ts`）。
 
 ---
 
-## 十、关键设计决策
+## 十、现金流计算器（CashFlowCalculator）
+
+### 概述
+
+已知现金流的**唯一咽喉点**。把两张表合并成「每月净流量」：
+
+| 来源 | 内容 | 符号 |
+|------|------|------|
+| `cash_flows` where kind = income | 月薪、季度奖、年终奖 | + |
+| `cash_flows` where kind = expense | 房租、宽带、人寿险 | − |
+| `recurring_expenses`（全部资产） | 车险、物业费等资产附属支出 | − |
+
+```
+某月净流量 = Σ收入月度等价 − Σ家庭支出月度等价 − Σ资产附属支出月度等价
+```
+
+月度等价一律走 `toMonthlyAmount`（`RecurringExpenseCalculator`）：按月 ÷1、按季 ÷3、按年 ÷12。**不复制折算逻辑**，非法/缺失频率回落按月。
+
+两张表按构造互斥（一张 asset-scoped、一张 household-scoped），相加不会重复计算。
+
+### 生效区间
+
+`effective_from <= month <= effective_to`，**两端都含**；`effective_to` 为 NULL 表示持续中。不做天级折算——某月生效就算整月。
+
+### 预加载求值器
+
+`loadMonthlyNet()` / `fromCashFlows(list)` 一次性把数据装完，返回纯内存的 `MonthlyNetInflow` 求值器。预测要往前推几十上百个月，逐月查库会变成几百次 SQL。
+
+UI 传 store 里那份（`fromCashFlows`），既省一次查库，也让「现金流变了要重算」在依赖数组里是个真实用到的依赖。
+
+### 累计口径
+
+```
+accumulate(currentMonth, toMonth)
+  → 覆盖「currentMonth 的下一月」到「toMonth」，两端含
+  → toMonth <= currentMonth 时返回 { total: 0, months: 0 }
+```
+
+**当前月永不计入**：账户最新余额快照已经反映了本月的现金流。
+
+### 代表性月度净流入
+
+`getRepresentativeMonthlyInflow` 取**未来 12 个月的平均值**，而不是「下个月」。用 12 个月是为了把季度奖、年终奖摊平——否则一个只在三月发年终奖的用户，其余十一个月的「月度净流入」都会显示成负的。
+
+---
+
+## 十一、可用资金计算器（UsableAssetsCalculator）
+
+### 概述
+
+回答一个问题：**指定日期 D，你手上能拿出多少钱？**
+
+```
+usable(D) = availableLiquid      今天就能花的活期余额
+          + maturedDeposits      今天之后、D 之前（含 D）到期的定期本金
+          + netCashFlow          当前月的下一月至 D 所在月的累计净现金流
+```
+
+### 三条铁律
+
+1. **受限账户永不计入**，无论 D 有多远——公积金不会因为等得够久就变得可动用
+2. **负债账户不计入**
+3. **定期只算本金**，不含任何利息。App 不采集利率、不计算利息、不显示应计收益，页面上每个数字都是用户亲手录入的
+
+### 到期日判定
+
+`maturityDate <= D` 即视为已到期，**含等于**。
+
+`depositsMaturingBy()` 只挑「因到期日而受限」的账户：排除负债类型、排除受限类型（公积金）、排除 `maturityDate <= 今天` 的（那些已经在 `availableLiquid` 里了）。**这是防止重复计算的关键**——一笔今天已到期的定期只出现在 `availableLiquid`，不会再出现在 `maturedDeposits`。
+
+### 示例
+
+今天 2026-11-08：活期 ¥50,000、三年定期 ¥100,000（2027-06-30 到期）、公积金 ¥80,000、月薪 ¥20,000、房租 ¥4,500、车险 ¥800（月度净流量 +¥14,700）
+
+| 查询日期 | availableLiquid | maturedDeposits | netCashFlow | **total** |
+|---------|-----------------|-----------------|-------------|-----------|
+| 2026-11-30 | 50,000 | 0 | 0（当月不计） | **¥50,000** |
+| 2027-01-31 | 50,000 | 0 | 29,400（2 个月） | **¥79,400** |
+| 2027-06-30 | 50,000 | 100,000 | 117,600（8 个月） | **¥267,600** |
+| 2040-12-31 | 50,000 | 100,000 | … | 公积金 ¥80,000 **始终不在里面** |
+
+### 边界
+
+- `D` 早于今天：`monthsAfter` 返回空区间，`netCashFlow = 0`
+- 没有任何现金流记录：`netCashFlow = 0`，`total` = 可用活期 + 已到期定期
+
+---
+
+## 十二、关键设计决策
 
 ### 1. 日均按 30 天计算
 
@@ -690,7 +826,7 @@ monthsNeeded = 94000 / 5171 ≈ 18.2 个月
 
 ---
 
-## 十一、文件索引
+## 十三、文件索引
 
 ```
 src/engine/
@@ -702,21 +838,27 @@ src/engine/
 │   ├── NoAmortizationStrategy.ts  # 不分摊
 │   └── index.ts                   # 策略工厂 getStrategy()
 ├── HoldingCostCalculator.ts       # 持有成本（核心计算器）
-├── NetWorthCalculator.ts          # 净资产
+├── NetWorthCalculator.ts          # 净资产 + 趋势序列聚合 buildTrendSeries()
+├── accountBuckets.ts              # 账户流动性分桶（可用/受限/负债）
 ├── SettlementCalculator.ts        # 卖出结算
-├── RecurringExpenseCalculator.ts  # 经常性支出
+├── RecurringExpenseCalculator.ts  # 经常性支出（资产附属）+ toMonthlyAmount 折算咽喉点
+├── CashFlowCalculator.ts          # 家庭现金流 → 每月净流量
+├── UsableAssetsCalculator.ts      # 指定日期的可用资金
 ├── MaintenanceCalculator.ts       # 维护费
-├── ProjectionCalculator.ts        # 净资产预测
+├── ProjectionCalculator.ts        # 净资产预测（现金流感知）
 └── AmortizationRecommender.ts     # 分摊方式推荐
+
+src/utils/
+└── months.ts                      # 'YYYY-MM' 纯整数月份运算（addMonths/monthDiff/monthRange/monthsAfter）
 
 src/types/
 ├── models.ts                      # 所有数据类型定义
-└── enums.ts                       # 枚举（资产类别、分摊方式、资产状态等）
+└── enums.ts                       # 枚举（资产类别、分摊方式、资产状态、账户类型、现金流方向等）
 ```
 
 ---
 
-## 十二、快速参考卡片
+## 十四、快速参考卡片
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -726,6 +868,13 @@ src/types/
 │  月持有成本 = 月分摊 + 月经常性支出 + 月维护分摊             │
 │  日均成本   = 月持有成本 ÷ 30                                │
 │  净资产     = Σ账户余额 + Σ资产估值                          │
+│             = 可用 + 受限 + 负债 + 资产估值（总额不变）      │
+│                                                              │
+│  ── 可用资金（指定日期 D）──                                 │
+│  usable(D) = 可用活期                                        │
+│            + D 之前到期的定期本金（不含利息）                │
+│            + 累计净现金流（当前月的下一月 → D 所在月）       │
+│  受限账户（公积金）永不计入；负债账户不计入                  │
 │                                                              │
 │  ── 分摊 ──                                                  │
 │  简单线性：购入价 ÷ 已持有月数                               │
@@ -739,8 +888,12 @@ src/types/
 │  日均成本   = 净支出 ÷ 持有天数                              │
 │                                                              │
 │  ── 预测 ──                                                  │
-│  月增长率   = 线性回归斜率（最近6个数据点）                  │
-│  达成月数   = (目标 - 当前净资产) ÷ 月增长率                 │
+│  每月增量   = 已知净现金流(该月) + 残差斜率                  │
+│  残差斜率   = 线性回归斜率（最近6个数据点，可为负）          │
+│  已知净现金流 = Σ收入 - Σ家庭支出 - Σ资产附属支出（月度等价）│
+│  达成月数   = 从锚点的下一月起逐月累加，直到越过目标         │
+│  四种结论   = achieved / achievable / unreachable /          │
+│               insufficient-data（不许静默空白）              │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```

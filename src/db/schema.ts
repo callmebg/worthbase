@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   type TEXT NOT NULL,
   icon TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  maturity_date TEXT,
   deleted_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -64,6 +65,21 @@ CREATE TABLE IF NOT EXISTS recurring_expenses (
   FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
 
+-- 家庭现金流表 (不依附于资产的固定支出 + 全部固定收入)
+-- 与 recurring_expenses 按领域互斥：后者只管资产附属支出，喂持有成本；
+-- 本表管房租/宽带/人寿险 + 月薪/季度奖/年终奖，喂预测与可用资产计算。
+CREATE TABLE IF NOT EXISTS cash_flows (
+  id TEXT PRIMARY KEY NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'expense',
+  name TEXT NOT NULL,
+  amount REAL NOT NULL,
+  frequency TEXT NOT NULL DEFAULT 'monthly',
+  effective_from TEXT NOT NULL,
+  effective_to TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL
+);
+
 -- 一次性维护表
 CREATE TABLE IF NOT EXISTS maintenance_records (
   id TEXT PRIMARY KEY NOT NULL,
@@ -111,6 +127,10 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_date ON balance_snapshots(snapshot_date
 -- 经常性支出：按资产和生效区间查询
 CREATE INDEX IF NOT EXISTS idx_recurring_asset ON recurring_expenses(asset_id);
 CREATE INDEX IF NOT EXISTS idx_recurring_effective ON recurring_expenses(effective_from, effective_to);
+
+-- 家庭现金流：按生效区间和类型查询
+CREATE INDEX IF NOT EXISTS idx_cash_flow_effective ON cash_flows(effective_from, effective_to);
+CREATE INDEX IF NOT EXISTS idx_cash_flow_kind ON cash_flows(kind);
 
 -- 一次性维护：按资产查询
 CREATE INDEX IF NOT EXISTS idx_maintenance_asset ON maintenance_records(asset_id);

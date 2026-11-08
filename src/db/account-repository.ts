@@ -15,6 +15,7 @@ interface AccountRow {
   type: string;
   icon: string | null;
   sort_order: number;
+  maturity_date: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -27,11 +28,23 @@ function rowToAccount(row: AccountRow): Account {
     type: row.type as AccountType,
     icon: row.icon,
     sortOrder: row.sort_order,
+    // 老库升级前该列不存在，SELECT * 返回 undefined —— 统一归一为 null
+    maturityDate: row.maturity_date ?? null,
     deletedAt: row.deleted_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
+
+/**
+ * Input shape for creating an account.
+ * `maturityDate` is optional — omitting it means the account is immediately
+ * available (subject to its type).
+ */
+export type NewAccount = Omit<
+  Account,
+  'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'maturityDate'
+> & { maturityDate?: string | null };
 
 export const AccountRepository = {
   /** Get all active (non-deleted) accounts */
@@ -52,16 +65,17 @@ export const AccountRepository = {
     return row ? rowToAccount(row) : null;
   },
 
-  async create(account: Omit<Account, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>): Promise<Account> {
+  async create(account: NewAccount): Promise<Account> {
     const db = getDatabase();
     const now = new Date().toISOString();
     const id = generateId();
+    const maturityDate = account.maturityDate ?? null;
     await db.runAsync(
-      `INSERT INTO accounts (id, name, type, icon, sort_order, deleted_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, ?);`,
-      id, account.name, account.type, account.icon, account.sortOrder, now, now
+      `INSERT INTO accounts (id, name, type, icon, sort_order, maturity_date, deleted_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?);`,
+      id, account.name, account.type, account.icon, account.sortOrder, maturityDate, now, now
     );
-    return { ...account, id, deletedAt: null, createdAt: now, updatedAt: now };
+    return { ...account, maturityDate, id, deletedAt: null, createdAt: now, updatedAt: now };
   },
 
   async update(id: string, updates: Partial<Account>): Promise<void> {
@@ -74,6 +88,8 @@ export const AccountRepository = {
     if (updates.type !== undefined) { fields.push('type = ?'); values.push(updates.type); }
     if (updates.icon !== undefined) { fields.push('icon = ?'); values.push(updates.icon); }
     if (updates.sortOrder !== undefined) { fields.push('sort_order = ?'); values.push(updates.sortOrder); }
+    // 显式传 null 表示清除到期日（恢复为随时可动用）
+    if (updates.maturityDate !== undefined) { fields.push('maturity_date = ?'); values.push(updates.maturityDate); }
 
     if (fields.length === 0) return;
     fields.push('updated_at = ?');

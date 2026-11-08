@@ -8,6 +8,7 @@ import type {
   AmortizationType,
   AssetCategory,
   AssetStatus,
+  CashFlowKind,
   ExpenseFrequency,
 } from './enums';
 
@@ -18,6 +19,12 @@ export interface Account {
   type: AccountType;
   icon: string | null;
   sortOrder: number;
+  /**
+   * 到期日 (YYYY-MM-DD) — 定期存款等未到期前不计入「可用资金」，
+   * 到期日当天及之后计入。始终计入净资产。null = 随时可动用。
+   * 本金仍由用户手动录入余额快照；App 不计算任何利息。
+   */
+  maturityDate: string | null;
   /** Soft delete timestamp — null means active */
   deletedAt: string | null;
   createdAt: string; // ISO 8601
@@ -84,6 +91,32 @@ export interface RecurringExpense {
   effectiveTo: string | null;
   /** Reason the expense was ended: manual, retired, sold, or null if ongoing */
   endedReason: 'manual' | 'retired' | 'sold' | null;
+  createdAt: string; // ISO 8601
+}
+
+/**
+ * 家庭现金流 - a household-level recurring cash flow, NOT attached to any asset.
+ *
+ * Domain boundary (see design.md D4): expenses that belong to an asset (车险、
+ * 依附于房产的物业费) live in {@link RecurringExpense} and feed holding cost.
+ * This type covers 房租/宽带/人寿险 plus **all** income (月薪/季度奖/年终奖),
+ * and feeds the projection and usable-assets calculations. The two are disjoint
+ * by construction, so summing both never double-counts.
+ */
+export interface CashFlow {
+  id: string;
+  /** Direction: fixed expense or fixed income */
+  kind: CashFlowKind;
+  name: string;
+  /** Amount per billing period (see frequency); normalized to monthly in calculations */
+  amount: number;
+  /** Billing frequency: monthly (default), quarterly, or yearly */
+  frequency: ExpenseFrequency;
+  /** Date from which this cash flow is effective (YYYY-MM) */
+  effectiveFrom: string;
+  /** Date until which this cash flow is effective (YYYY-MM), null = ongoing */
+  effectiveTo: string | null;
+  note: string | null;
   createdAt: string; // ISO 8601
 }
 
@@ -170,13 +203,26 @@ export interface SettlementResult {
 
 /** 净资产计算结果 - net worth breakdown */
 export interface NetWorthResult {
-  /** Total liquid assets (sum of all account balances) */
+  /**
+   * Total of all account balances (available + restricted + liabilities).
+   *
+   * @deprecated The value is unchanged for backwards compatibility, but the name
+   * is misleading — it includes funds that are not freely spendable (公积金) and
+   * negative liability balances. Prefer {@link NetWorthResult.availableLiquid} /
+   * {@link NetWorthResult.restrictedLiquid} / {@link NetWorthResult.liabilities}.
+   */
   liquidAssets: number;
+  /** 可自由支配的账户余额合计 (excludes restricted and liability accounts) */
+  availableLiquid: number;
+  /** 计入净资产但不可自由支配的账户余额合计 (公积金 等 RESTRICTED_ACCOUNT_TYPES) */
+  restrictedLiquid: number;
+  /** 负债账户余额合计 (信用卡、贷款；通常为负数) */
+  liabilities: number;
   /** Total asset valuations (sum of all active assets' current valuations) */
   assetValuations: number;
   /** Total unamortized purchase cost (internal use only, not shown to users) */
   unamortizedCost: number;
-  /** Net worth = liquidAssets + assetValuations */
+  /** Net worth = availableLiquid + restrictedLiquid + liabilities + assetValuations */
   netWorth: number;
 }
 
@@ -186,6 +232,29 @@ export interface NetWorthTrendPoint {
   liquidAssets: number;
   assetValuations: number;
   netWorth: number;
+}
+
+/**
+ * 指定日期的可用资金 - how much the user can actually spend on a given date.
+ *
+ * total = availableLiquid + maturedDeposits + netCashFlow
+ *
+ * 受限账户（公积金）永不计入，无论目标日期多远；负债账户不计入。
+ * 定期存款只算本金，不含任何利息。
+ */
+export interface UsableAssetsResult {
+  /** The queried date (YYYY-MM-DD) */
+  targetDate: string;
+  /** 可自由支配的活期余额 (no maturity date, not restricted, not a liability) */
+  availableLiquid: number;
+  /** 目标日期前已到期的定期存款本金合计 (maturityDate <= targetDate) */
+  maturedDeposits: number;
+  /** 当前月的下一月至目标月累计的净现金流 */
+  netCashFlow: number;
+  /** availableLiquid + maturedDeposits + netCashFlow */
+  total: number;
+  /** Number of months counted in netCashFlow (0 when targetDate is in the current month) */
+  monthsCounted: number;
 }
 
 /** 次均成本计算结果 */

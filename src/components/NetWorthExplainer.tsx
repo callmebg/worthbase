@@ -74,6 +74,13 @@ export function NetWorthExplainer({ visible, onClose }: NetWorthExplainerProps) 
           labelColor={theme.colors.onSurface}
           descColor={theme.colors.onSurfaceVariant}
         />
+        <TermItem
+          label="可用 / 受限"
+          desc="账户余额会拆成两栏：现在就能花的算「可用」，公积金和未到期的定期存款算「受限」。两者都计入净资产——钱是你的，只是今天动不了。想知道将来某天能拿出多少，去 账户页 → 可用资金。"
+          dotColor={theme.colors.primary}
+          labelColor={theme.colors.onSurface}
+          descColor={theme.colors.onSurfaceVariant}
+        />
       </View>
 
       <View

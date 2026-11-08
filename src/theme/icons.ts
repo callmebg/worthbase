@@ -22,6 +22,7 @@ export const ACCOUNT_TYPE_ICONS: Record<AccountType, string> = {
   [AccountType.BANK_CARD]: 'Building2',
   [AccountType.CASH]: 'Banknote',
   [AccountType.FUND]: 'TrendingUp',
+  [AccountType.PROVIDENT_FUND]: 'Landmark',
   [AccountType.CREDIT_CARD]: 'CreditCard',
   [AccountType.LOAN]: 'HandCoins',
   [AccountType.OTHER]: 'MoreHorizontal',

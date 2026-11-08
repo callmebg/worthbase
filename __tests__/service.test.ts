@@ -90,8 +90,16 @@ import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
+import { CashFlowRepository } from '@/db/cash-flow-repository';
 import { MaintenanceRepository } from '@/db/maintenance-repository';
-import { AccountType, AssetCategory, AmortizationType, AssetStatus } from '@/types/enums';
+import {
+  AccountType,
+  AssetCategory,
+  AmortizationType,
+  AssetStatus,
+  CashFlowKind,
+  ExpenseFrequency,
+} from '@/types/enums';
 import { initMockDatabase, resetMockDatabase } from './helpers/mock-database';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -407,6 +415,120 @@ describe('ImportService', () => {
     expect(byName['保管费'].frequency).toBe('monthly');
     expect(byName['年费'].frequency).toBe('yearly');
     expect(byName['异常'].frequency).toBe('monthly');
+  });
+});
+
+// ─── Future Usable Assets: 到期日 + 家庭现金流的导入导出 ───
+describe('Import/Export: maturityDate + cashFlows', () => {
+  test('往返无损：到期日与现金流导出后再导入，数据一致', async () => {
+    // 一个带到期日的定期账户 + 一个公积金账户
+    await AccountRepository.create({
+      name: '三年定期', type: AccountType.BANK_CARD, icon: null, sortOrder: 1,
+      maturityDate: '2027-06-30',
+    });
+    await AccountRepository.create({
+      name: '公积金', type: AccountType.PROVIDENT_FUND, icon: null, sortOrder: 2,
+    });
+    await CashFlowRepository.create({
+      kind: CashFlowKind.INCOME, name: '月薪', amount: 20000,
+      frequency: ExpenseFrequency.MONTHLY, effectiveFrom: '2026-01', effectiveTo: null, note: null,
+    });
+    await CashFlowRepository.create({
+      kind: CashFlowKind.EXPENSE, name: '房租', amount: 4500,
+      frequency: ExpenseFrequency.MONTHLY, effectiveFrom: '2026-01', effectiveTo: '2027-12', note: '含物业',
+    });
+    await CashFlowRepository.create({
+      kind: CashFlowKind.INCOME, name: '年终奖', amount: 60000,
+      frequency: ExpenseFrequency.YEARLY, effectiveFrom: '2026-01', effectiveTo: null, note: null,
+    });
+
+    await ExportService.exportJSON();
+    const exportedPath = [...mockFiles.keys()].find((k) => k.includes('worthbase_export'));
+    expect(exportedPath).toBeTruthy();
+
+    // 导出内容里确实带上了新字段
+    const exported = JSON.parse(mockFiles.get(exportedPath!)!);
+    expect(exported.accounts.find((a: any) => a.name === '三年定期').maturityDate).toBe('2027-06-30');
+    expect(exported.cashFlows).toHaveLength(3);
+
+    await ImportService.importReplace(exportedPath!);
+
+    const accounts = await AccountRepository.getAll();
+    const byName: Record<string, any> = Object.fromEntries(accounts.map((a) => [a.name, a]));
+    expect(byName['三年定期'].maturityDate).toBe('2027-06-30');
+    expect(byName['三年定期'].type).toBe(AccountType.BANK_CARD);
+    expect(byName['公积金'].type).toBe(AccountType.PROVIDENT_FUND);
+    expect(byName['公积金'].maturityDate).toBeNull();
+
+    const flows = await CashFlowRepository.getAll();
+    expect(flows).toHaveLength(3);
+    const flowByName: Record<string, any> = Object.fromEntries(flows.map((f) => [f.name, f]));
+    expect(flowByName['月薪']).toMatchObject({ kind: CashFlowKind.INCOME, amount: 20000, frequency: ExpenseFrequency.MONTHLY, effectiveTo: null });
+    expect(flowByName['房租']).toMatchObject({ kind: CashFlowKind.EXPENSE, amount: 4500, effectiveTo: '2027-12', note: '含物业' });
+    expect(flowByName['年终奖'].frequency).toBe(ExpenseFrequency.YEARLY);
+  });
+
+  test('旧备份（无 cashFlows / 无 maturityDate）导入不报错，回落到空值', async () => {
+    const oldBackup = {
+      version: 1,
+      accounts: [
+        { id: 'a1', name: '老账户', type: AccountType.BANK_CARD, icon: null, sortOrder: 0 },
+      ],
+      balanceSnapshots: [],
+      assets: [],
+      recurringExpenses: [],
+      maintenanceRecords: [],
+      valuationHistory: [],
+      settings: null,
+    };
+    mockFiles.set('/test/old.json', JSON.stringify(oldBackup));
+
+    await ImportService.importReplace('/test/old.json');
+
+    const accounts = await AccountRepository.getAll();
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].maturityDate).toBeNull();
+    expect(await CashFlowRepository.getAll()).toHaveLength(0);
+  });
+
+  test('非法 kind / frequency 回落默认值而不是抛错', async () => {
+    const badBackup = {
+      version: 1,
+      accounts: [],
+      balanceSnapshots: [],
+      assets: [],
+      recurringExpenses: [],
+      cashFlows: [
+        { id: 'c1', kind: 'banana', name: '怪数据', amount: 100, frequency: 'weekly', effectiveFrom: '2026-01' },
+      ],
+      maintenanceRecords: [],
+      valuationHistory: [],
+      settings: null,
+    };
+    mockFiles.set('/test/bad.json', JSON.stringify(badBackup));
+
+    await ImportService.importReplace('/test/bad.json');
+
+    const flows = await CashFlowRepository.getAll();
+    expect(flows).toHaveLength(1);
+    expect(flows[0].kind).toBe(CashFlowKind.EXPENSE);
+    expect(flows[0].frequency).toBe(ExpenseFrequency.MONTHLY);
+  });
+
+  test('importReplace 会清空旧的 cash_flows，不残留', async () => {
+    await CashFlowRepository.create({
+      kind: CashFlowKind.INCOME, name: '旧月薪', amount: 10000,
+      frequency: ExpenseFrequency.MONTHLY, effectiveFrom: '2025-01', effectiveTo: null, note: null,
+    });
+    expect(await CashFlowRepository.getAll()).toHaveLength(1);
+
+    mockFiles.set('/test/replace.json', JSON.stringify({
+      version: 1, accounts: [], balanceSnapshots: [], assets: [],
+      recurringExpenses: [], cashFlows: [], maintenanceRecords: [], valuationHistory: [], settings: null,
+    }));
+    await ImportService.importReplace('/test/replace.json');
+
+    expect(await CashFlowRepository.getAll()).toHaveLength(0);
   });
 });
 

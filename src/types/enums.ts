@@ -10,6 +10,7 @@ export enum AccountType {
   BANK_CARD = 'bank_card',
   CASH = 'cash',
   FUND = 'fund',
+  PROVIDENT_FUND = 'provident_fund',
   CREDIT_CARD = 'credit_card',
   LOAN = 'loan',
   OTHER = 'other',
@@ -21,6 +22,15 @@ export const LIABILITY_ACCOUNT_TYPES: ReadonlySet<AccountType> = new Set([
   AccountType.LOAN,
 ]);
 
+/**
+ * Account types whose balance belongs to net worth but is NOT freely spendable
+ * (公积金 etc.). Liquidity is carried by the type itself — there is deliberately
+ * no per-account "include in net worth" toggle.
+ */
+export const RESTRICTED_ACCOUNT_TYPES: ReadonlySet<AccountType> = new Set([
+  AccountType.PROVIDENT_FUND,
+]);
+
 /** Human-readable labels for AccountType */
 export const AccountTypeLabels: Record<AccountType, string> = {
   [AccountType.WECHAT]: '微信',
@@ -28,6 +38,7 @@ export const AccountTypeLabels: Record<AccountType, string> = {
   [AccountType.BANK_CARD]: '银行卡',
   [AccountType.CASH]: '现金',
   [AccountType.FUND]: '基金',
+  [AccountType.PROVIDENT_FUND]: '公积金',
   [AccountType.CREDIT_CARD]: '信用卡',
   [AccountType.LOAN]: '贷款',
   [AccountType.OTHER]: '其他',
@@ -43,6 +54,7 @@ export const AccountTypeIcons: Record<AccountType, string> = {
   [AccountType.BANK_CARD]: '🏦',
   [AccountType.CASH]: '💵',
   [AccountType.FUND]: '📈',
+  [AccountType.PROVIDENT_FUND]: '🏛️',
   [AccountType.CREDIT_CARD]: '💳',
   [AccountType.LOAN]: '🏧',
   [AccountType.OTHER]: '📋',
@@ -151,6 +163,39 @@ export const EXPENSE_FREQUENCY_MONTHS: Record<ExpenseFrequency, number> = {
   [ExpenseFrequency.QUARTERLY]: 3,
   [ExpenseFrequency.YEARLY]: 12,
 };
+
+/**
+ * Direction of a household cash flow (家庭现金流方向).
+ * Household-level only — expenses attached to an asset live in RecurringExpense.
+ */
+export enum CashFlowKind {
+  /** 固定支出（房租、宽带、人寿险等不依附于资产的支出） */
+  EXPENSE = 'expense',
+  /** 固定收入（月薪、季度奖、年终奖） */
+  INCOME = 'income',
+}
+
+/** Human-readable labels for CashFlowKind */
+export const CashFlowKindLabels: Record<CashFlowKind, string> = {
+  [CashFlowKind.EXPENSE]: '固定支出',
+  [CashFlowKind.INCOME]: '固定收入',
+};
+
+/**
+ * Coerce a stored/imported frequency string to a valid ExpenseFrequency.
+ * Null, undefined and unrecognized values all fall back to monthly rather than
+ * throwing — old backups and hand-edited exports must not break the app.
+ */
+export function normalizeExpenseFrequency(value: string | null | undefined): ExpenseFrequency {
+  return value === ExpenseFrequency.QUARTERLY || value === ExpenseFrequency.YEARLY
+    ? value
+    : ExpenseFrequency.MONTHLY;
+}
+
+/** Coerce a stored/imported cash flow direction, falling back to expense. */
+export function normalizeCashFlowKind(value: string | null | undefined): CashFlowKind {
+  return value === CashFlowKind.INCOME ? CashFlowKind.INCOME : CashFlowKind.EXPENSE;
+}
 
 /**
  * Asset lifecycle status.

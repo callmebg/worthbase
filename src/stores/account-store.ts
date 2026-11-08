@@ -16,8 +16,17 @@ interface AccountStore {
   isLoading: boolean;
 
   loadAccounts: () => Promise<void>;
-  addAccount: (name: string, type: AccountType, icon?: string | null, initialBalance?: number) => Promise<Account>;
-  editAccount: (id: string, updates: Partial<Pick<Account, 'name' | 'type' | 'icon'>>) => Promise<void>;
+  addAccount: (
+    name: string,
+    type: AccountType,
+    icon?: string | null,
+    initialBalance?: number,
+    maturityDate?: string | null
+  ) => Promise<Account>;
+  editAccount: (
+    id: string,
+    updates: Partial<Pick<Account, 'name' | 'type' | 'icon' | 'maturityDate'>>
+  ) => Promise<void>;
   updateBalance: (accountId: string, balance: number, date?: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   hardDelete: (id: string) => Promise<void>;
@@ -36,13 +45,14 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
     set({ accounts, balances, isLoading: false });
   },
 
-  addAccount: async (name, type, icon = null, initialBalance?: number) => {
+  addAccount: async (name, type, icon = null, initialBalance?: number, maturityDate?: string | null) => {
     const maxOrder = Math.max(0, ...get().accounts.map(a => a.sortOrder));
     const account = await AccountRepository.create({
       name,
       type,
       icon,
       sortOrder: maxOrder + 1,
+      maturityDate: maturityDate ?? null,
     });
 
     if (initialBalance !== undefined && initialBalance !== 0) {

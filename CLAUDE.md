@@ -47,10 +47,17 @@ Also update `CHANGELOG.md` (Keep a Changelog format, entries in Chinese).
 
 ## Database Migrations
 
-- Current version: v10 (see `src/db/migrations.ts`)
+- Current version: v11 (see `src/db/migrations.ts`)
 - Migrations must be idempotent
 - Bump `CURRENT_VERSION` constant when adding new migration
-- No migration tests yet — see `docs/test-plan.md` (gap G5 / task T9)
+- **改不了列约束**：`client.ts` 开了 `PRAGMA foreign_keys = ON`，而 `runMigrations` 把每个
+  migration 包在 `BEGIN/COMMIT` 里 —— SQLite 中该 pragma 在事务内是 no-op，所以标准的
+  「先关外键 → 建新表 → 迁数据 → 改名」流程走不通。要改已有表的结构，优先**加新表**
+  而不是重建旧表（v11 的 `cash_flows` 就是这么来的，见 `openspec/changes/future-usable-assets/design.md` D4）
+- 安全的 migration 只有两种：`ALTER TABLE ... ADD COLUMN`（用 `PRAGMA table_info` 探测幂等）
+  和 `CREATE TABLE IF NOT EXISTS`
+- Migration 测试仅有 v11 一例（`__tests__/usable-assets.test.ts`，用 sql.js 造 v10 老库跑升级）；
+  v1–v10 仍无覆盖 —— 见 `docs/test-plan.md` (gap G5 / task T9)
 
 ## Type Checking
 
@@ -61,7 +68,7 @@ or re-introduce a tolerated-error list — fix the type instead.
 
 ## Testing
 
-- `npm test` — 249 unit/integration tests (jest + ts-jest, sql.js for real-SQLite repository tests)
+- `npm test` — 317 unit/integration tests (jest + ts-jest, sql.js for real-SQLite repository tests)
 - `./scripts/adb-ui-test.sh` — on-device E2E harness (see `docs/test-plan.md` §4)
 - Network features must be verified on a real device inside the mainland-China network:
   a `curl` that works from the dev machine does not prove the phone can reach the host

@@ -9,17 +9,26 @@ import {
   View,
   Text,
   FlatList,
+  SectionList,
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { useAppTheme, formatCurrency, formatDate } from '@/utils/format';
+import { useRouter } from 'expo-router';
+import { useAppTheme, formatCurrency, formatDate, getCurrentDate } from '@/utils/format';
 import { useAccountStore } from '@/stores/account-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
-import { AccountType, AccountTypeLabels, LIABILITY_ACCOUNT_TYPES } from '@/types/enums';
+import {
+  AccountType,
+  AccountTypeLabels,
+  LIABILITY_ACCOUNT_TYPES,
+  RESTRICTED_ACCOUNT_TYPES,
+} from '@/types/enums';
 import { ACCOUNT_TYPE_ICONS, resolveAccountIcon } from '@/theme/icons';
+import { bucketAccounts, type LiquidityBucket } from '@/engine/accountBuckets';
 import { IconPickerSheet } from '@/components/IconPickerSheet';
+import { DatePickerField } from '@/components/DatePickerField';
 import type { Account } from '@/types/models';
 import { AppCard } from '@/components/ui/Card';
 import { AppButton } from '@/components/ui/Button';
@@ -31,11 +40,19 @@ import { ConfirmSheet } from '@/components/ConfirmSheet';
 import { isValidNumber } from '@/utils/validation';
 import { useToast } from '@/hooks/useToast';
 import { FORTUNES } from '@/utils/fortunes';
-import { spacing } from '@/theme/tokens';
+import { spacing, radius } from '@/theme/tokens';
 import { AccountExplainer } from '@/components/AccountExplainer';
+
+/** 账户列表的分组顺序与标题 */
+const ACCOUNT_SECTIONS: { bucket: LiquidityBucket; title: string }[] = [
+  { bucket: 'available', title: '可用' },
+  { bucket: 'restricted', title: '受限' },
+  { bucket: 'liability', title: '负债' },
+];
 
 export default function AccountsScreen() {
   const theme = useAppTheme();
+  const router = useRouter();
   const toast = useToast();
   const { accounts, balances, loadAccounts, addAccount, editAccount, updateBalance, deleteAccount, hardDelete } = useAccountStore();
   const { currencySymbol } = useSettingsStore();
@@ -65,6 +82,19 @@ export default function AccountsScreen() {
   };
 
   const totalBalance = accounts.reduce((sum, a) => sum + (balances.get(a.id) ?? 0), 0);
+
+  // 按流动性分三组。分组口径与总览页、净资产计算共用 accountBuckets.ts，
+  // 三处不会走偏：「受限」= 公积金（永久）+ 未到期定期（临时）。
+  const today = getCurrentDate();
+  const buckets = bucketAccounts(accounts, today);
+  const sections = ACCOUNT_SECTIONS
+    .map(({ bucket, title }) => ({
+      bucket,
+      title,
+      data: buckets[bucket],
+      subtotal: buckets[bucket].reduce((sum, a) => sum + (balances.get(a.id) ?? 0), 0),
+    }))
+    .filter(section => section.data.length > 0);
 
   const handleUpdateBalance = async (accountId: string, balance: number) => {
     try {
@@ -125,13 +155,44 @@ export default function AccountsScreen() {
           <Text style={[styles.totalAmount, { color: theme.colors.onPrimary }]}>{formatCurrency(totalBalance, currencySymbol)}</Text>
         </TouchableOpacity>
         <Text style={[styles.accountCount, { color: theme.colors.onPrimary }]}>{accounts.length} 个账户</Text>
+
+        {/* 固定收支 / 可用资金 —— 都是「钱」的事，收进概览卡里，不单独占两行列表 */}
+        <View style={styles.heroEntryRow}>
+          <TouchableOpacity
+            onPress={() => router.push('/cash-flow')}
+            activeOpacity={0.7}
+            style={styles.heroEntryBtn}
+          >
+            <Icon name="Wallet" size={14} color={theme.colors.onPrimary} />
+            <Text style={[styles.heroEntryText, { color: theme.colors.onPrimary }]}>固定收支</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/usable-assets')}
+            activeOpacity={0.7}
+            style={styles.heroEntryBtn}
+          >
+            <Icon name="Calendar" size={14} color={theme.colors.onPrimary} />
+            <Text style={[styles.heroEntryText, { color: theme.colors.onPrimary }]}>可用资金</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Account List */}
-      <FlatList
-        data={accounts}
+      {/* Account List — 按流动性分组（可用 / 受限 / 负债），空组不渲染 */}
+      <SectionList
+        sections={sections}
         keyExtractor={item => item.id}
         contentContainerStyle={[styles.list, { paddingBottom: 24 }]}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.onSurfaceVariant }]}>
+              {section.title}
+            </Text>
+            <Text style={[styles.sectionSubtotal, { color: theme.colors.onSurface }]}>
+              {formatCurrency(section.subtotal, currencySymbol)}
+            </Text>
+          </View>
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -164,9 +225,27 @@ export default function AccountsScreen() {
                 <Text style={[styles.cardName, { color: theme.colors.onSurface }]}>
                   {item.name}
                 </Text>
-                <Text style={[styles.cardType, { color: theme.colors.onSurfaceVariant }]}>
-                  {AccountTypeLabels[item.type]}
-                </Text>
+                <View style={styles.cardTypeRow}>
+                  <Text style={[styles.cardType, { color: theme.colors.onSurfaceVariant }]}>
+                    {AccountTypeLabels[item.type]}
+                  </Text>
+                  {item.maturityDate ? (
+                    item.maturityDate > today ? (
+                      // 未到期：显式 badge，让用户知道这笔钱为什么不在「可用」里
+                      <View style={[styles.maturityBadge, { backgroundColor: theme.colors.surfaceVariant }]}>
+                        <Icon name="Lock" size={10} color="onSurfaceVariant" />
+                        <Text style={[styles.maturityBadgeText, { color: theme.colors.onSurfaceVariant }]}>
+                          定期 · 未到期 {formatDate(item.maturityDate)}
+                        </Text>
+                      </View>
+                    ) : (
+                      // 已到期：只留日期标记，badge 撤掉——它已经能用了
+                      <Text style={[styles.cardType, { color: theme.colors.onSurfaceVariant }]}>
+                        · {formatDate(item.maturityDate)} 已到期
+                      </Text>
+                    )
+                  ) : null}
+                </View>
               </View>
               <TouchableOpacity onPress={() => setUpdateTarget(item)} activeOpacity={0.7} style={styles.cardBalanceWrap}>
                 <Text style={[styles.cardBalance, { color: theme.colors.onSurface }]}>
@@ -219,9 +298,9 @@ export default function AccountsScreen() {
       <AddAccountSheet
         visible={showAddSheet}
         onClose={() => setShowAddSheet(false)}
-        onAdd={async (name, type, initialBalance, icon) => {
+        onAdd={async (name, type, initialBalance, icon, maturityDate) => {
           try {
-            await addAccount(name, type, icon ?? null, initialBalance);
+            await addAccount(name, type, icon ?? null, initialBalance, maturityDate ?? null);
             setShowAddSheet(false);
             toast.show('账户已添加', 'success');
           } catch (err) {
@@ -248,9 +327,9 @@ export default function AccountsScreen() {
       <EditAccountSheet
         account={editTarget}
         onClose={() => setEditTarget(null)}
-        onSave={async (id, name, type, icon) => {
+        onSave={async (id, name, type, icon, maturityDate) => {
           try {
-            await editAccount(id, { name, type, icon: icon ?? null });
+            await editAccount(id, { name, type, icon: icon ?? null, maturityDate: maturityDate ?? null });
             setEditTarget(null);
             toast.show('已保存', 'success');
           } catch (err) {
@@ -317,12 +396,46 @@ export default function AccountsScreen() {
   );
 }
 
+// ── 到期日字段（定期存款）──
+
+/**
+ * 可选的到期日输入。到期日之前这笔钱不计入「可用资金」，到期日当天及之后计入。
+ * **只认本金**——不采集利率、不计算利息，App 里出现的每个数字都是用户亲手输入的。
+ */
+function MaturityDateField({ value, onChange }: {
+  value: string | null;
+  onChange: (date: string | null) => void;
+}) {
+  const theme = useAppTheme();
+  return (
+    <View>
+      <DatePickerField
+        label="到期日（定期存款才需要填）"
+        value={value ?? ''}
+        onChange={(date) => onChange(date)}
+      />
+      <Text style={[styles.maturityHint, { color: theme.colors.onSurfaceVariant }]}>
+        到期日之前不算进「可用资金」。只记本金，不算利息。
+      </Text>
+      {value ? (
+        <AppButton title="清除到期日" variant="text" onPress={() => onChange(null)} />
+      ) : null}
+    </View>
+  );
+}
+
 // ── Add Account BottomSheet ──
 
 function AddAccountSheet({ visible, onClose, onAdd }: {
   visible: boolean;
   onClose: () => void;
-  onAdd: (name: string, type: AccountType, initialBalance?: number, icon?: string | null) => void;
+  onAdd: (
+    name: string,
+    type: AccountType,
+    initialBalance?: number,
+    icon?: string | null,
+    maturityDate?: string | null
+  ) => void;
 }) {
   const theme = useAppTheme();
   const [name, setName] = useState('');
@@ -330,7 +443,11 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
   const [initialBalance, setInitialBalance] = useState('');
   const [customIcon, setCustomIcon] = useState<string | null>(null);
   const [iconPickerVisible, setIconPickerVisible] = useState(false);
+  const [maturityDate, setMaturityDate] = useState<string | null>(null);
   const types = Object.values(AccountType);
+
+  // 到期日只对「一笔钱锁到某天」的账户有意义：负债账户和公积金（永久受限）不显示
+  const showMaturityDate = !LIABILITY_ACCOUNT_TYPES.has(type) && !RESTRICTED_ACCOUNT_TYPES.has(type);
 
   const balanceError =
     initialBalance && !isValidNumber(initialBalance) ? '请输入有效金额' : '';
@@ -356,6 +473,9 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
           />
         ))}
       </View>
+      {showMaturityDate && (
+        <MaturityDateField value={maturityDate} onChange={setMaturityDate} />
+      )}
       {/* Custom icon button */}
       <TouchableOpacity
         onPress={() => setIconPickerVisible(true)}
@@ -389,10 +509,11 @@ function AddAccountSheet({ visible, onClose, onAdd }: {
                 balance = -balance;
               }
             }
-            onAdd(name.trim(), type, balance, customIcon);
+            onAdd(name.trim(), type, balance, customIcon, showMaturityDate ? maturityDate : null);
             setName('');
             setInitialBalance('');
             setCustomIcon(null);
+            setMaturityDate(null);
           }}
           style={styles.sheetBtn}
         />
@@ -514,7 +635,13 @@ function BalanceHistorySheet({ visible, onClose }: {
 function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }: {
   account: Account | null;
   onClose: () => void;
-  onSave: (id: string, name: string, type: AccountType, icon?: string | null) => void;
+  onSave: (
+    id: string,
+    name: string,
+    type: AccountType,
+    icon?: string | null,
+    maturityDate?: string | null
+  ) => void;
   onArchive: (account: Account) => void;
   onHardDelete: (account: Account) => void;
 }) {
@@ -523,6 +650,7 @@ function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }:
   const [type, setType] = useState<AccountType>(AccountType.WECHAT);
   const [customIcon, setCustomIcon] = useState<string | null>(null);
   const [iconPickerVisible, setIconPickerVisible] = useState(false);
+  const [maturityDate, setMaturityDate] = useState<string | null>(null);
   const types = Object.values(AccountType);
 
   useEffect(() => {
@@ -530,10 +658,14 @@ function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }:
       setName(account.name);
       setType(account.type);
       setCustomIcon(account.icon);
+      setMaturityDate(account.maturityDate);
     }
   }, [account]);
 
   if (!account) return null;
+
+  // 切到负债/公积金类型时收起到期日，避免存下一个语义上矛盾的字段
+  const showMaturityDate = !LIABILITY_ACCOUNT_TYPES.has(type) && !RESTRICTED_ACCOUNT_TYPES.has(type);
 
   return (
     <AppBottomSheet visible={!!account} onClose={onClose} snapPoints={['60%', '85%']}>
@@ -555,6 +687,9 @@ function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }:
           />
         ))}
       </View>
+      {showMaturityDate ? (
+        <MaturityDateField value={maturityDate} onChange={setMaturityDate} />
+      ) : null}
       {/* Custom icon button */}
       <TouchableOpacity
         onPress={() => setIconPickerVisible(true)}
@@ -572,7 +707,9 @@ function EditAccountSheet({ account, onClose, onSave, onArchive, onHardDelete }:
           title="保存"
           variant="primary"
           disabled={!name.trim()}
-          onPress={() => onSave(account.id, name.trim(), type, customIcon)}
+          onPress={() =>
+            onSave(account.id, name.trim(), type, customIcon, showMaturityDate ? maturityDate : null)
+          }
           style={styles.sheetBtn}
         />
       </View>
@@ -772,6 +909,24 @@ const styles = StyleSheet.create({
   infoIconBtn: { opacity: 0.7, padding: 2 },
   totalAmount: { fontSize: 32, fontWeight: '700', marginTop: spacing.xs },
   accountCount: { fontSize: 12, opacity: 0.6, marginTop: spacing.xs },
+  // 概览卡内的两个入口：半透明胶囊，不额外占列表行
+  heroEntryRow: {
+    flexDirection: 'row',
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  heroEntryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  heroEntryText: { fontSize: 13, fontWeight: '600' },
   list: { paddingHorizontal: spacing.md },
   accountCard: { marginBottom: spacing.sm + spacing.xs },
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
@@ -783,6 +938,28 @@ const styles = StyleSheet.create({
   cardDelta: { fontSize: 11, marginTop: 2 },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   cardMetaSep: { fontSize: 11, marginHorizontal: 4 },
+  // 流动性分组
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  sectionTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
+  sectionSubtotal: { fontSize: 13, fontWeight: '600' },
+  // 定期存款到期日
+  cardTypeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  maturityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  maturityBadgeText: { fontSize: 11 },
+  maturityHint: { fontSize: 12, lineHeight: 17, marginBottom: spacing.sm },
   // Sheet styles
   sheetTitle: { fontSize: 20, fontWeight: '700', marginBottom: spacing.md },
   sheetSubtitle: { fontSize: 16, marginBottom: spacing.xs },

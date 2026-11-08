@@ -9,6 +9,7 @@ import { AccountRepository } from '@/db/account-repository';
 import { BalanceSnapshotRepository } from '@/db/balance-snapshot-repository';
 import { AssetRepository } from '@/db/asset-repository';
 import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
+import { CashFlowRepository } from '@/db/cash-flow-repository';
 import { MaintenanceRepository } from '@/db/maintenance-repository';
 import { ValuationRepository } from '@/db/valuation-repository';
 import { SettingsRepository } from '@/db/settings-repository';
@@ -21,11 +22,13 @@ export const ExportService = {
    * Export all app data as a JSON file.
    */
   async exportJSON(): Promise<void> {
-    const [accounts, assets, settings, snapshotDates] = await Promise.all([
+    // accounts 已自带 maturityDate（AccountRepository 映射），无需额外处理
+    const [accounts, assets, settings, snapshotDates, cashFlows] = await Promise.all([
       AccountRepository.getAll(),
       AssetRepository.getAll(),
       SettingsRepository.loadAll(),
       BalanceSnapshotRepository.getAllSnapshotDates(),
+      CashFlowRepository.getAll(),
     ]);
 
     // Get all balance snapshots, excluding deleted accounts
@@ -59,6 +62,7 @@ export const ExportService = {
       balanceSnapshots: snapshots,
       assets,
       recurringExpenses,
+      cashFlows,
       maintenanceRecords,
       valuationHistory,
       settings,
