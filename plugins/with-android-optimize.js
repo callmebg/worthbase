@@ -20,6 +20,19 @@ android.enableShrinkResourcesInReleaseBuilds=true
 expo.useLegacyPackaging=true
 `;
 
+/**
+ * Gradle 拉 Maven 依赖时默认 connect/socket 超时都是 30s、且只试一次。
+ * 中央仓偶发抖动就会让整条 CI 红掉（2026-11-08 的 #11 就是这么死的：
+ * SocketTimeoutException: Read timed out @ downloadByCoords）。
+ * 拉长超时 + 允许重试，让瞬时抖动能自己恢复。
+ */
+const GRADLE_NET_RESILIENCE_APPEND = `
+# ── Network resilience (injected by with-android-optimize.js) ───────────────
+systemProp.org.gradle.internal.http.connectionTimeout=180000
+systemProp.org.gradle.internal.http.socketTimeout=180000
+systemProp.org.gradle.internal.repository.max.tentatives=3
+`;
+
 const PROGUARD_APPEND = `
 # ── APK size optimization (injected by with-android-optimize.js) ────────────
 
@@ -72,8 +85,11 @@ function withAndroidOptimize(config) {
         if (!content.includes('android.enableMinifyInReleaseBuilds')) {
           content = content.trimEnd() + '\n' + GRADLE_PROPS_APPEND;
         }
+        if (!content.includes('org.gradle.internal.http.socketTimeout')) {
+          content = content.trimEnd() + '\n' + GRADLE_NET_RESILIENCE_APPEND;
+        }
         fs.writeFileSync(gradlePropsPath, content, 'utf8');
-        console.log('[android-optimize] Patched gradle.properties → arm64 + R8 + shrink + legacy packaging');
+        console.log('[android-optimize] Patched gradle.properties → arm64 + R8 + shrink + legacy packaging + net resilience');
       }
 
       // ── 2. proguard-rules.pro: append keep rules ───────────────────────────

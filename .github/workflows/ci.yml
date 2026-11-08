@@ -116,10 +116,19 @@ jobs:
 
       # 关键修正：不再 `|| exit 0` 吞掉失败。构建坏了这里就必须红。
       # gradlew 缺失同样视为失败（prebuild 本该生成它），不再静默跳过。
+      # GRADLE_USER_HOME 刻意**不设**，让 Gradle 走默认的 ~/.gradle ——
+      # 上面 Restore Gradle cache 存取的正是这个目录。
+      # 之前这里设成 ${{ runner.temp }}/.gradle，和缓存路径完全错开，导致缓存
+      # 从来没命中过：每次构建都从零下载全部依赖，Maven 中央仓抖一下就整条红。
+      # （2026-11-08 run #11：SocketTimeoutException: Read timed out @ downloadByCoords）
+      #
+      # 顺带去掉原来那个 "Save Gradle cache" 步骤：actions/cache（非 restore 版）
+      # 在 key 未命中时本来就会在 job 结束自动保存，再用同一个 key 存一次只会
+      # 得到 "Cache already exists" 的警告。
+      #
+      # 重试 3 次：Gradle 拉依赖的超时/重试参数已由 with-android-optimize.js 注入
+      # gradle.properties，这里再兜一层，防的是 wrapper 自身或整段网络抽风。
       - name: Build Android release APK (local)
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME }}
-          GRADLE_USER_HOME: ${{ runner.temp }}/.gradle
         working-directory: android
         run: |
           set -e
@@ -128,16 +137,16 @@ jobs:
             exit 1
           fi
           echo "Starting local Gradle build..."
-          ./gradlew assembleRelease --stacktrace
-
-      - name: Save Gradle cache
-        if: always()
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle/wrapper/gradle-wrapper.properties') }}
+          attempt=1
+          until ./gradlew assembleRelease --stacktrace; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "::error::Gradle 构建连续 3 次失败"
+              exit 1
+            fi
+            echo "::warning::Gradle 第 $attempt 次构建失败（大概率是依赖下载超时），20s 后重试"
+            attempt=$((attempt + 1))
+            sleep 20
+          done
 
       - name: Verify APK was produced
         run: |
