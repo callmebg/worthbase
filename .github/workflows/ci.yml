@@ -8,6 +8,9 @@ name: CI
 on:
   push:
     branches: ['**']
+    # 推版本号 tag 就自动发 GitHub Release（带 APK）。
+    # 仓库历史的 tag 没有 v 前缀（1.7.2 / 1.8.0），所以匹配 *.*.*
+    tags: ['*.*.*']
   pull_request:
   workflow_dispatch:
 
@@ -64,6 +67,12 @@ jobs:
     runs-on: ubuntu-24.04
     needs: gates
     if: github.event_name != 'pull_request'
+    # 覆盖 workflow 级的 read-all：tag 推送时最后一步要用 gh 发 Release。
+    # GitHub 不支持 step 级权限，所以只能挂在整个 job 上——代价是普通分支推送
+    # 也带着 contents: write。token 只对本仓库有效，且本 job 本来就在跑
+    # npm ci / gradle 这类任意代码，边际风险很小。
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -176,6 +185,47 @@ jobs:
           name: ${{ env.APK_BASENAME }}
           path: android/app/build/outputs/apk/release/${{ env.APK_BASENAME }}.apk
           if-no-files-found: error
+
+      # ─── 自动发 GitHub Release（仅 tag 推送）───
+      # 用 runner 预装的 gh CLI，不引入新的 action 依赖（也不用猜
+      # download-artifact 的版本能否配 upload-artifact@v6）。APK 就在本 job 的
+      # 磁盘上，所以**发布出去的包和 CI 刚刚验证过的包是同一个文件**——
+      # 不存在「另起一个 workflow 重新构建，结果发出一个没验证过的包」的风险。
+      #
+      # 发布说明取 docs/release-notes/<版本号>.md；没有就退回自动生成变更列表。
+      - name: Publish GitHub Release (tag only)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          VERSION="${GITHUB_REF_NAME}"
+          APK="android/app/build/outputs/apk/release/${APK_BASENAME}.apk"
+          NOTES="docs/release-notes/${VERSION}.md"
+
+          if [ ! -f "$APK" ]; then
+            echo "::error::找不到待发布的 APK: $APK"
+            exit 1
+          fi
+
+          # Release 可能已经手动建过了——本项目就有先例：1.8.0 是先手动发布、后补 tag。
+          # 这种情况不该红，改成只把 APK 附件传上去，标题和正文一个字都不动。
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release ${VERSION} 已存在 —— 只上传 APK 附件，不改标题与正文"
+            gh release upload "$VERSION" "$APK" --clobber
+          elif [ -f "$NOTES" ]; then
+            echo "使用手写发布说明: $NOTES"
+            gh release create "$VERSION" "$APK" \
+              --title "家底 ${VERSION}" \
+              --notes-file "$NOTES" \
+              --verify-tag
+          else
+            echo "::warning::未找到 $NOTES，改用自动生成的变更列表。想要手写说明，在 docs/release-notes/ 下放一个 <版本号>.md 即可"
+            gh release create "$VERSION" "$APK" \
+              --title "家底 ${VERSION}" \
+              --generate-notes \
+              --verify-tag
+          fi
 
       # 仅在失败时上传原生工程，便于排查（原来是无条件上传，噪音大）
       - name: Upload generated android project (debug only)

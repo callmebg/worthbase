@@ -24,6 +24,23 @@ npm run check:version    # package.json / app.json / build.gradle must agree
 
 Also update `CHANGELOG.md` (Keep a Changelog format, entries in Chinese).
 
+## Releasing
+
+`CHANGELOG.md` 是给开发者看的（全、技术细节）。**GitHub Release 的说明另写一份**，
+放在 `docs/release-notes/<version>.md`，面向用户：讲能做什么了、升级须知、
+以及「刻意没做」什么。
+
+推 tag 即自动发布，不需要手动建 Release：
+
+```bash
+git tag 1.8.0 && git push && git push --tags
+```
+
+`ci.yml` 在 `tags: ['*.*.*']` 上触发（仓库历史的 tag **没有 `v` 前缀**），
+gates 全绿 → 构建 APK → 用 runner 预装的 `gh` 发 Release，附件就是本 job
+刚构建出来的那个 APK（发布物与 CI 验证物是同一个文件，不另起 workflow 重建）。
+有 `docs/release-notes/<version>.md` 就用它当正文，没有则退回 `--generate-notes`。
+
 ## Architecture
 
 - React Native / Expo (SDK 55) with SQLite database
