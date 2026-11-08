@@ -3,7 +3,9 @@
  * Calculates the settlement when an asset is sold.
  *
  * 卖出结算：
- * - 净支出 = 购入价 + 累计持有成本 - 卖价
+ * - 累计持有成本 = 累计经常性支出 + 累计维护费（仅现金性成本；累计折旧不计入——
+ *   折旧是购入价的会计分摊，已由「贬值 = 购入价 - 卖价」体现，计入会把购入价算两次）
+ * - 净支出 = 购入价 + 累计持有成本 - 卖价（= 贬值 + 现金性持有成本）
  * - 日均成本 = 净支出 ÷ 持有天数
  */
 
@@ -41,8 +43,9 @@ export const SettlementCalculator = {
     const accumulatedMaintenanceNonAmortized = await MaintenanceCalculator.getNonAmortizedTotal(asset.id);
     const accumulatedMaintenance = accumulatedMaintenanceAmortized + accumulatedMaintenanceNonAmortized;
 
-    // 4. Total holding cost = recurring + maintenance + amortization
-    const totalHoldingCost = accumulatedRecurring + accumulatedMaintenance + accumulatedAmortization;
+    // 4. Cash holding cost = recurring + maintenance
+    //    (amortization excluded: it allocates the purchase price, already covered by depreciation)
+    const totalHoldingCost = accumulatedRecurring + accumulatedMaintenance;
 
     // 5. Depreciation = purchase price - sell price (negative if appreciated)
     const depreciation = asset.purchasePrice - sellPrice;

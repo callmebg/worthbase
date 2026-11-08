@@ -400,7 +400,7 @@ export function AssetDetailModal({ asset, onClose, onEdit }: {
             <InfoRow label="购入日期" value={formatDate(asset.purchaseDate)} theme={theme} />
             <InfoRow label="购入价格" value={formatCurrency(asset.purchasePrice, currencySymbol)} theme={theme} />
             {asset.weightGrams ? <InfoRow label="克数" value={`${asset.weightGrams} g`} theme={theme} /> : null}
-            <InfoRow label="已持有" value={formatDuration(getMonthsHeld(asset.purchaseDate))} theme={theme} />
+            <InfoRow label="已持有" value={formatDuration(getMonthsHeld(asset.purchaseDate, asset.sellDate))} theme={theme} />
             <InfoRow label="折旧方式" value={describeAmortization(asset)} theme={theme} />
             {asset.residualValue ? <InfoRow label="预估残值" value={formatCurrency(asset.residualValue, currencySymbol)} theme={theme} /> : null}
           </View>

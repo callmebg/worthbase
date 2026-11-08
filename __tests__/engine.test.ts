@@ -284,7 +284,7 @@ describe('Settlement calculation logic', () => {
   // Test the core settlement math without DB dependencies
   test('net expenditure = purchase + holding cost - sell price', () => {
     const purchasePrice = 12000;
-    const totalHoldingCost = 5000;
+    const totalHoldingCost = 5000; // cash costs only (recurring + maintenance)
     const sellPrice = 6000;
     const netExpenditure = purchasePrice + totalHoldingCost - sellPrice;
     expect(netExpenditure).toBe(11000);
@@ -304,12 +304,33 @@ describe('Settlement calculation logic', () => {
     expect(dailyAverage).toBeCloseTo(30.14, 2);
   });
 
-  test('total holding cost = recurring + maintenance + amortization', () => {
+  test('total holding cost = recurring + maintenance (amortization excluded)', () => {
+    // Amortization is an allocation of the purchase price, not a cash cost —
+    // counting it here would double-count the purchase price inside netExpenditure.
     const recurring = 2000;
     const maintenance = 1500;
-    const amortization = 5000;
-    const total = recurring + maintenance + amortization;
-    expect(total).toBe(8500);
+    const total = recurring + maintenance;
+    expect(total).toBe(3500);
+  });
+
+  // Regression (user report): fully depreciated device — purchase ¥6,999, sold ¥2,400,
+  // held 1,477 days. The old formula added capped accumulated amortization (≈ purchase
+  // price) on top of the purchase price → net ¥11,598, daily ¥7.85/day.
+  // Correct: net ¥4,599 (= depreciation), daily ≈ ¥3.11/day.
+  test('fully depreciated asset: net expenditure = depreciation, purchase price counted once', () => {
+    const purchasePrice = 6999;
+    const sellPrice = 2400;
+    const totalHoldingCost = 0; // cash costs only; accumulated amortization (6,999, capped) excluded
+    const depreciation = purchasePrice - sellPrice;
+    const netExpenditure = purchasePrice + totalHoldingCost - sellPrice;
+    const ownershipDays = 1477;
+    const dailyAverage = netExpenditure / ownershipDays;
+
+    expect(depreciation).toBe(4599);
+    expect(netExpenditure).toBe(4599);
+    expect(netExpenditure).not.toBe(11598); // old double-counted value
+    expect(depreciation + totalHoldingCost).toBe(netExpenditure); // settlement card identity
+    expect(dailyAverage).toBeCloseTo(3.11, 2); // not 7.85
   });
 
   test('daysBetween for settlement', () => {

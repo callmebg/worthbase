@@ -33,6 +33,7 @@ import { RecurringExpenseRepository } from '@/db/recurring-expense-repository';
 import { SettingsRepository } from '@/db/settings-repository';
 import { UsageRepository } from '@/db/usage-repository';
 import { UsageCalculator } from '@/engine/UsageCalculator';
+import { SettlementCalculator } from '@/engine/SettlementCalculator';
 import { AccountType, AssetCategory, AmortizationType, AssetStatus, ExpenseFrequency } from '@/types/enums';
 import { initMockDatabase, resetMockDatabase } from './helpers/mock-database';
 
@@ -1048,5 +1049,56 @@ describe('RecurringExpenseRepository - frequency', () => {
     const all = await RecurringExpenseRepository.getByAsset(asset.id);
     expect(all).toHaveLength(1);
     expect(all[0].frequency).toBe(ExpenseFrequency.MONTHLY);
+  });
+});
+
+// ─── Settlement Calculator Integration Tests ───
+describe('SettlementCalculator (卖出结算口径)', () => {
+  test('fully depreciated sold asset: netExpenditure = depreciation, purchase price counted once', async () => {
+    const asset = await AssetRepository.create({
+      name: '旧手机', category: AssetCategory.ELECTRONICS,
+      purchaseDate: '2018-10-01', purchasePrice: 6999,
+      amortizationType: AmortizationType.EXPECTED_LIFESPAN, expectedLifespanMonths: 24,
+      residualValue: null, valuationTracking: false, currentValuation: null,
+      usageTracking: false, initialUseCount: 0,
+      status: AssetStatus.SOLD, sellDate: '2022-10-15', sellPrice: 2400,
+      weightGrams: null, imagePath: null, icon: null,
+    });
+
+    const result = await SettlementCalculator.calculate(asset);
+
+    // Held 49 months > 24-month lifespan → accumulated amortization capped at purchase price
+    expect(result.accumulatedAmortization).toBe(6999);
+    // No recurring/maintenance records → cash holding cost is zero
+    expect(result.totalHoldingCost).toBe(0);
+    expect(result.depreciation).toBe(4599);
+    // Old bug: 6999 + 6999 − 2400 = 11598 (purchase price double-counted)
+    expect(result.netExpenditure).toBe(4599);
+    expect(result.ownershipDays).toBe(1475); // 2018-10-01 → 2022-10-15
+    expect(result.dailyAverageCost).toBeCloseTo(3.12, 2); // ≈ 4599/1475, not ≈ 7.86
+  });
+
+  test('cash holding costs stack on depreciation in net expenditure', async () => {
+    const asset = await AssetRepository.create({
+      name: '带月费的设备', category: AssetCategory.ELECTRONICS,
+      purchaseDate: '2022-01-01', purchasePrice: 12000,
+      amortizationType: AmortizationType.SIMPLE_LINEAR, expectedLifespanMonths: null,
+      residualValue: null, valuationTracking: false, currentValuation: null,
+      usageTracking: false, initialUseCount: 0,
+      status: AssetStatus.SOLD, sellDate: '2023-01-15', sellPrice: 6000,
+      weightGrams: null, imagePath: null, icon: null,
+    });
+    await RecurringExpenseRepository.create({
+      assetId: asset.id, name: '云存储', amount: 100,
+      frequency: ExpenseFrequency.MONTHLY,
+      effectiveFrom: '2022-01', effectiveTo: null,
+    });
+
+    const result = await SettlementCalculator.calculate(asset);
+
+    expect(result.accumulatedRecurring).toBeGreaterThan(0);
+    expect(result.totalHoldingCost).toBe(result.accumulatedRecurring + result.accumulatedMaintenance);
+    expect(result.netExpenditure).toBe(result.depreciation + result.totalHoldingCost);
+    expect(result.dailyAverageCost).toBeCloseTo(result.netExpenditure / result.ownershipDays, 6);
   });
 });

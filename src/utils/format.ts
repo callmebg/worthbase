@@ -107,10 +107,14 @@ export function getCurrentDate(): string {
   return new Date().toISOString().substring(0, 10);
 }
 
-/** Calculate months between two YYYY-MM-DD dates (inclusive of start month) */
-export function getMonthsHeld(purchaseDate: string): number {
+/**
+ * Calculate months between two YYYY-MM-DD dates (inclusive of start month).
+ * @param endDate optional end boundary — pass a sold asset's sellDate so the
+ *                duration stops at the sell day; defaults to today.
+ */
+export function getMonthsHeld(purchaseDate: string, endDate?: string | null): number {
   const start = new Date(purchaseDate);
-  const now = new Date();
+  const now = endDate ? new Date(endDate) : new Date();
   const years = now.getFullYear() - start.getFullYear();
   const months = now.getMonth() - start.getMonth();
   let total = years * 12 + months;

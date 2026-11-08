@@ -156,11 +156,11 @@ export interface SettlementResult {
   accumulatedRecurring: number;
   /** Total accumulated maintenance costs */
   accumulatedMaintenance: number;
-  /** Total accumulated amortization cost */
+  /** Accumulated amortization — informational only, NOT part of totalHoldingCost (it allocates purchasePrice, already reflected in depreciation) */
   accumulatedAmortization: number;
-  /** Total holding cost = recurring + maintenance + amortization */
+  /** Cash holding cost = recurring + maintenance (amortization excluded to avoid double-counting the purchase price) */
   totalHoldingCost: number;
-  /** True net expenditure = purchasePrice + totalHoldingCost - sellPrice */
+  /** True net expenditure = purchasePrice + totalHoldingCost - sellPrice (= depreciation + cash holding cost) */
   netExpenditure: number;
   /** Days of ownership */
   ownershipDays: number;

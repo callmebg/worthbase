@@ -320,7 +320,7 @@ function AssetCardItem({ asset, cost, usage, currencySymbol, onPress, onLongPres
   const isActive = asset.status === AssetStatus.ACTIVE;
   const valuation = asset.currentValuation ?? asset.purchasePrice;
   const change = valuation - asset.purchasePrice;
-  const months = getMonthsHeld(asset.purchaseDate);
+  const months = getMonthsHeld(asset.purchaseDate, asset.sellDate);
   const iconName = resolveAssetIcon(asset.icon, asset.category);
 
   const statusColor = AssetStatusColors[asset.status];
