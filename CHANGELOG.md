@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.2] - 2026-11-08
+
+### Fixed
+- **卖出结算「真实净支出 / 日均成本」重复计入购入价**：累计折旧（购入价的会计分摊，上限即购入价）此前被计入「累计持有成本」，净支出又叠加购入价，已折满资产的购入价被算两次——实例：购入 ¥6,999、卖出 ¥2,400、持有 1,477 天的设备显示净支出 ¥11,598、日均 ¥7.85/天（正确应为 ¥4,599、约 ¥3.11/天）。现累计持有成本仅统计现金性成本（经常性支出 + 维护费），结算卡片满足「贬值 + 持有成本 = 净支出、净支出 ÷ 持有天数 = 日均成本」；卖出预览弹窗同口径修正（同一计算入口）
+- **已售资产「已持有」持续增长到今天**：详情页「购入信息」与资产列表卡片的持有时长此前一律从购入日期算到当前日期，资产卖出多年后仍显示"已持有 7 年+"。现已售资产截止于卖出日（`getMonthsHeld` 新增可选截止日期参数），详情页与列表一致
+
+### Changed
+- 测试从 249 增至 258：结算口径回归（含用户报告实例）、`getMonthsHeld` / `formatDuration` 单测、`SettlementCalculator` sql.js 集成用例
+
 ## [1.7.1] - 2026-10-04
 
 ### Changed

@@ -2,7 +2,7 @@
   "expo": {
     "name": "家底 WorthBase",
     "slug": "worthbase",
-    "version": "1.7.1",
+    "version": "1.7.2",
     "scheme": "worthbase",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "com.worthbase.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "adaptiveIcon": {
         "backgroundColor": "#6C5CE7",
         "foregroundImage": "./assets/android-icon-foreground.png",
