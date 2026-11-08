@@ -1,4 +1,8 @@
-## MODIFIED Requirements
+## Purpose
+
+共享 UI 组件的行为契约。这些组件被所有页面复用，其交互细节（图标解析、BottomSheet 内的键盘避让输入等）一旦走样会同时影响多处界面，因此单独立 spec 约束。
+
+## Requirements
 
 ### Requirement: Icon rendering in shared components
 The AppChip component SHALL render Lucide icons using the project's `Icon` component instead of passing icon name strings to Paper's `icon` prop. The icon SHALL be displayed to the left of the chip label. The AppButton component SHALL render Lucide icons using the project's `Icon` component, passed as a React element to Paper's `icon` prop.

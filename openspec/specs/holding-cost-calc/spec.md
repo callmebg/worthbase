@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+回答「养这个东西每天花我多少钱」——家底的杀手级功能。覆盖 4 种分摊策略、依附于资产的经常性支出、一次性维护费、日均成本，以及卖出时的净支出结算。
+
+## Requirements
 
 ### Requirement: Amortization method selection
 The system SHALL provide 4 amortization methods for each asset, selected by the user at creation time and changeable at any time:

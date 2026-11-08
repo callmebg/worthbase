@@ -4,7 +4,7 @@
 - [x] 1.2 `src/db/schema.ts`：新增 `cash_flows` 表（`id/kind/name/amount/frequency/effective_from/effective_to/note/created_at`）+ 索引 `idx_cash_flow_effective (effective_from, effective_to)` 与 `idx_cash_flow_kind (kind)`
 - [x] 1.3 `src/db/migrations.ts`：`CURRENT_VERSION` 10 → 11；新增 v11 migration，`accounts.maturity_date` 用 `PRAGMA table_info` 探测后再 `ALTER TABLE ADD COLUMN`（沿用 v10 写法），`cash_flows` 用 `CREATE TABLE IF NOT EXISTS`
 - [x] 1.4 确认 v11 **不含任何改表重建**（design.md D4）；用一份 v10 的真实老库跑升级，验证 `getDbVersion()` 返回 11 且原有账户/资产/支出数据完好
-- [ ] 1.5 验证旧版代码打开 v11 库不崩溃（新增列/表对旧查询透明）
+- [x] 1.5 验证旧版代码打开 v11 库不崩溃（新增列/表对旧查询透明）
 
 ## 2. 枚举与类型
 
@@ -77,11 +77,11 @@
 ## 9. 验证与发布
 
 - [x] 9.1 `npx tsc --noEmit` exit 0；`npm test` 全绿；`npm run lint` 无新增告警（项目已归零，别破）
-- [ ] 9.2 真机（大陆网络内）走完整链路：老库升级 → 建公积金账户 → 给银行卡设到期日 → 录月薪 + 房租 → 查 2027-06-30 可用资金 → 看预测达成日期
-- [ ] 9.3 手工验证 migration 回滚路径：升级前导出备份，升级后确认可用备份恢复
+- [x] 9.2 真机（大陆网络内）走完整链路：老库升级 → 建公积金账户 → 给银行卡设到期日 → 录月薪 + 房租 → 查 2027-06-30 可用资金 → 看预测达成日期
+- [x] 9.3 手工验证 migration 回滚路径：升级前导出备份，升级后确认可用备份恢复
 - [x] 9.4 `./scripts/bump-version.sh <version>` 升版本，`npm run check:version` 三处一致
 - [x] 9.5 `CHANGELOG.md` 按 Keep a Changelog 格式补中文条目（新增 / 变更 / 修复分节）
-- [ ] 9.6 `openspec validate future-usable-assets` 通过；实现完成后走 `/opsx:archive`
+- [x] 9.6 `openspec validate future-usable-assets` 通过；实现完成后走 `/opsx:archive`
 
 ## 10. 明确不做（防止实施期范围膨胀）
 

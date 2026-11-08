@@ -1,4 +1,8 @@
-## ADDED Requirements
+## Purpose
+
+资产在录入 App 之前往往已经被使用过。本能力让用户补记「入坑前已用次数」，使次均成本覆盖完整持有期，而不只是 App 内记录的那一段。
+
+## Requirements
 
 ### Requirement: Initial use count field on asset
 The system SHALL provide an `initialUseCount` field on each asset, representing the number of times the item was used before the user started tracking in WorthBase. The field SHALL default to 0 and MUST be a non-negative integer.

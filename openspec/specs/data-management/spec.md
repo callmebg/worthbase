@@ -1,4 +1,8 @@
-## MODIFIED Requirements
+## Purpose
+
+数据完全本地、不做云端同步，因此导出与备份是用户对自己数据的唯一保障。覆盖 JSON 导出、切后台自动备份与文件系统操作。
+
+## Requirements
 
 ### Requirement: File system operations
 The export service, import service, and backup service SHALL use the `expo-file-system/legacy` import path to access file system operations (`documentDirectory`, `writeAsStringAsync`, `readAsStringAsync`, `copyAsync`, `deleteAsync`, `getInfoAsync`, `makeDirectoryAsync`, `readDirectoryAsync`, `EncodingType`). This ensures compatibility with Expo SDK 57 where the main `expo-file-system` entry point has migrated to a class-based API.

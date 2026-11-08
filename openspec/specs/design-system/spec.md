@@ -1,3 +1,7 @@
+## Purpose
+
+统一的设计令牌与主题层，保证所有界面在明暗模式与自定义主题色下保持一致。覆盖颜色/字号/间距令牌、明暗主题、主题色自定义与根级 ThemeProvider。
+
 ## Requirements
 
 ### Requirement: Design token system

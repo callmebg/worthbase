@@ -60,7 +60,7 @@ The system SHALL distinguish three outcomes explicitly rather than silently disp
 - **WHEN** the historical residual slope is −¥3,000/month but known cash flows contribute +¥12,000/month
 - **THEN** the system SHALL project using a net +¥9,000/month and SHALL display both components in the explanation
 
-#### Scenario: Projection with negative or zero total run-rate
+#### Scenario: Projection with negative or zero growth
 
 - **WHEN** the sum of monthly net inflow and residual slope is zero or negative and the goal is not yet reached
 - **THEN** the system SHALL NOT display a projected achievement date, and SHALL state that the goal is unreachable at the current run-rate, showing the remaining gap and the current monthly net inflow
